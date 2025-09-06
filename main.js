@@ -137,8 +137,8 @@ function createWindow() {
 
   const win = new BrowserWindow({
     ...savedBounds,
-    minWidth: 600,
-    minHeight: 500,
+    minWidth: 700,
+    minHeight: 550,
     frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -195,6 +195,15 @@ app.whenReady().then(() => {
     store.set('changesLog', logs);
   });
 
+  // --- Game Mode IPC Handlers ---
+  ipcMain.handle('gamemode:get-state', () => {
+    return store.get('gameModeState', { isOn: false, stoppedServices: [], userExclusions: [] });
+  });
+  ipcMain.handle('gamemode:set-state', (_, state) => {
+    store.set('gameModeState', state);
+  });
+
+
   // --- SystemD IPC Handlers ---
 
   ipcMain.handle('systemd:check', async () => {
@@ -247,6 +256,42 @@ app.whenReady().then(() => {
     }
   });
   
+  // A conservative blocklist of services/patterns essential for a desktop session.
+  const CRITICAL_SERVICE_PATTERNS = [
+    /^systemd-/, /^user@/, /^session-/, /display-manager\.service$/,
+    /\.socket$/, /\.mount$/, /\.target$/, /\.slice$/,
+    /dbus/, /polkit/, /gdm/, /sddm/, /lightdm/, /NetworkManager/, /wpa_supplicant/,
+    /pipewire/, /pulseaudio/, /wireplumber/, /alsa-/, /bluetooth/,
+    /gnome-/, /kde/, /plasma-/, /xdg-/,
+    /docker/, /podman/, /libvirt/, /virtualbox/, // Virtualization can be critical for some users
+    /cron/, /atd/, // Schedulers
+    /sshd/, // Remote access
+    /udisks2/, // Important for block device management
+    /upower/ // Power management
+  ];
+
+  ipcMain.handle('systemd:get-optimizable-services', async () => {
+      const listRunningCmd = 'systemctl list-units --type=service --state=running --no-pager --plain --output=json';
+      try {
+        const servicesStdout = await runCommand(listRunningCmd);
+        const runningServices = JSON.parse(servicesStdout);
+
+        const isCritical = (serviceName) => CRITICAL_SERVICE_PATTERNS.some(pattern => pattern.test(serviceName));
+
+        const optimizableServices = runningServices
+          .map(s => s.unit)
+          .filter(name => !isCritical(name))
+          .sort();
+        
+        return optimizableServices;
+
+      } catch (error) {
+        console.error('Failed to get optimizable services:', error.message);
+        throw new Error(`Failed to list running services: ${error.message}`);
+      }
+  });
+
+
   // Sanitize service name to prevent command injection
   const sanitize = (name) => {
     if (!/^[a-zA-Z0-9.\-_@]+$/.test(name)) {

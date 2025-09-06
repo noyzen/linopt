@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- STATE ---
   let allServicesCache = [];
   let changesLog = [];
+  let gameModeState = { isOn: false, stoppedServices: [], userExclusions: [] };
   let confirmCallback = null;
   const LOG_LIMIT = 500; // Cap logs to prevent performance issues
 
@@ -29,6 +30,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearChangesBtn = document.getElementById('clear-changes-btn');
   const liveUpdateChangesToggle = document.getElementById('live-update-changes-toggle');
   const refreshChangesBtn = document.getElementById('refresh-changes-btn');
+  const searchChangesInput = document.getElementById('search-changes-input');
+  const changeFilters = document.getElementById('change-filters');
+
+  // Game Mode
+  const gameModeToggle = document.getElementById('gamemode-toggle-checkbox');
+  const gameModeStatusTitle = document.getElementById('gamemode-status-title');
+  const gameModeStatusDescription = document.getElementById('gamemode-status-description');
+  const gameModeActiveBanner = document.getElementById('gamemode-active-banner');
+  const gameModeConfirmationArea = document.getElementById('gamemode-confirmation-area');
+  const gameModeServiceList = document.getElementById('gamemode-service-list');
+  const gameModeServiceRowTemplate = document.getElementById('gamemode-service-row-template');
+  const gameModeLoader = document.getElementById('gamemode-loader');
+  const gameModeConfirmBtn = document.getElementById('gamemode-confirm-btn');
+  const gameModeCancelBtn = document.getElementById('gamemode-cancel-btn');
 
   // Window controls
   const minimizeBtn = document.getElementById('min-btn');
@@ -41,8 +56,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const confirmationDialog = document.getElementById('confirmation-dialog');
   const modalTitle = document.getElementById('modal-title');
   const modalMessage = document.getElementById('modal-message');
+  const modalListContainer = document.getElementById('modal-list-container');
+  const restoreServiceRowTemplate = document.getElementById('restore-service-row-template');
   const modalConfirmBtn = document.getElementById('modal-confirm-btn');
   const modalCancelBtn = document.getElementById('modal-cancel-btn');
+  const modalContent = confirmationDialog.querySelector('.modal-content');
 
   minimizeBtn.addEventListener('click', () => window.electronAPI.minimizeWindow());
   maximizeBtn.addEventListener('click', () => window.electronAPI.maximizeWindow());
@@ -317,16 +335,29 @@ document.addEventListener('DOMContentLoaded', () => {
     return logDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
-  const populateChangesList = () => {
-    changeList.innerHTML = '';
-    toggleEmptyState('change-list', changesLog.length === 0);
+  const renderChangesList = () => {
+    const searchTerm = searchChangesInput.value.toLowerCase();
+    const activeFilter = changeFilters.querySelector('[aria-pressed="true"]').dataset.filter;
 
-    if (changesLog.length === 0) return;
+    const filteredLogs = changesLog.filter(log => {
+      const matchesSearch = log.service.toLowerCase().includes(searchTerm);
+      const matchesFilter = activeFilter === 'all' || log.action === activeFilter;
+      return matchesSearch && matchesFilter;
+    });
+
+    populateChangesList(filteredLogs);
+  };
+
+  const populateChangesList = (logs) => {
+    changeList.innerHTML = '';
+    toggleEmptyState('change-list', logs.length === 0);
+
+    if (logs.length === 0) return;
 
     let lastHeader = null;
     const fragment = document.createDocumentFragment();
 
-    changesLog.forEach((log) => {
+    logs.forEach((log) => {
       const dateHeaderString = getRelativeDateString(log.timestamp);
       if (dateHeaderString !== lastHeader) {
           const headerTpl = changeHeaderTemplate.content.cloneNode(true);
@@ -363,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
       changesLog.length = LOG_LIMIT; // Prune old logs to maintain performance
     }
     if(document.getElementById('changes-view').classList.contains('hidden') === false) {
-      populateChangesList();
+      renderChangesList();
     }
     savePersistentLogs();
   };
@@ -376,13 +407,171 @@ document.addEventListener('DOMContentLoaded', () => {
       confirmClass: 'btn-danger',
       onConfirm: () => {
         changesLog = [];
-        populateChangesList();
+        renderChangesList();
         savePersistentLogs(); // Persist the empty array
         updateStatus('Change log cleared.');
       }
     });
   };
   
+  // --- Game Mode Logic ---
+
+  const saveGameModeState = () => {
+    window.electronAPI.gamemode.setState(gameModeState);
+  };
+
+  const updateGameModeUI = () => {
+    gameModeToggle.checked = gameModeState.isOn;
+    gameModeToggle.disabled = false;
+    gameModeLoader.classList.add('hidden');
+    gameModeConfirmationArea.classList.add('hidden');
+    
+    if (gameModeState.isOn) {
+      gameModeActiveBanner.classList.remove('hidden');
+      gameModeStatusTitle.textContent = 'Game Mode is Active';
+      gameModeStatusDescription.classList.add('hidden');
+    } else {
+      gameModeActiveBanner.classList.add('hidden');
+      gameModeStatusTitle.textContent = 'Game Mode is Inactive';
+      gameModeStatusDescription.classList.remove('hidden');
+      gameModeStatusDescription.textContent = 'Click the switch to temporarily stop non-essential services and optimize your system for gaming.';
+    }
+  };
+
+  const showGameModeDeactivationDialog = () => {
+    // Populate list of stopped services
+    modalListContainer.innerHTML = '';
+    gameModeState.stoppedServices.sort().forEach(serviceName => {
+      const row = restoreServiceRowTemplate.content.cloneNode(true);
+      const rowName = row.querySelector('.service-name');
+      const rowToggle = row.querySelector('.restore-toggle');
+      rowName.textContent = serviceName;
+      rowToggle.dataset.serviceName = serviceName;
+      rowName.title = serviceName;
+      modalListContainer.appendChild(row);
+    });
+
+    // Configure modal for service list view
+    modalMessage.classList.remove('hidden'); // Ensure message is visible
+    modalListContainer.classList.remove('hidden');
+    modalContent.classList.add('large');
+
+    showConfirmationDialog({
+      title: 'Deactivate Game Mode',
+      message: `Select the services you wish to restart (${gameModeState.stoppedServices.length} total):`,
+      confirmText: 'Restore Selected',
+      onConfirm: async () => {
+        const servicesToRestore = [];
+        modalListContainer.querySelectorAll('.restore-toggle:checked').forEach(toggle => {
+          servicesToRestore.push(toggle.dataset.serviceName);
+        });
+
+        if (servicesToRestore.length > 0) {
+            updateStatus('Restoring services...');
+            const promises = servicesToRestore.map(service => 
+              window.electronAPI.systemd.startService(service, false).catch(err => {
+                logChange('Start', service, 'Failed');
+                console.error(`Failed to restart ${service}: ${err.message}`);
+              })
+            );
+            await Promise.all(promises);
+            servicesToRestore.forEach(service => logChange('Start', service, 'Success'));
+            updateStatus(`Restored ${servicesToRestore.length} services.`);
+        }
+
+        gameModeState.isOn = false;
+        gameModeState.stoppedServices = [];
+        saveGameModeState();
+        updateGameModeUI();
+      },
+      onCancel: () => {
+        gameModeToggle.disabled = false;
+      }
+    });
+  };
+
+  const handleGameModeToggle = async (event) => {
+    const activate = event.target.checked;
+    
+    // Visually revert and disable toggle until action is complete
+    event.target.checked = !activate; 
+    event.target.disabled = true;
+
+    if (activate) {
+      // --- Start Activation Flow ---
+      gameModeStatusDescription.textContent = 'Scanning for optimizable services...';
+      gameModeConfirmationArea.classList.remove('hidden');
+      gameModeLoader.classList.remove('hidden');
+      gameModeServiceList.innerHTML = '';
+      toggleEmptyState('gamemode-service-list', false);
+
+      try {
+        const optimizableServices = await window.electronAPI.systemd.getOptimizableServices();
+        gameModeLoader.classList.add('hidden');
+        
+        toggleEmptyState('gamemode-service-list', optimizableServices.length === 0);
+        gameModeConfirmBtn.disabled = optimizableServices.length === 0;
+
+        optimizableServices.forEach(serviceName => {
+            const row = gameModeServiceRowTemplate.content.cloneNode(true);
+            row.querySelector('.service-name').textContent = serviceName;
+            const excludeToggle = row.querySelector('.exclude-toggle');
+            excludeToggle.checked = gameModeState.userExclusions.includes(serviceName);
+            excludeToggle.dataset.serviceName = serviceName;
+            gameModeServiceList.appendChild(row);
+        });
+      } catch (err) {
+        updateStatus(`Error scanning services: ${err.message}`, true);
+        gameModeLoader.classList.add('hidden');
+        gameModeStatusDescription.textContent = 'Failed to scan for services. Please try again.';
+        setTimeout(() => updateGameModeUI(), 2000);
+      }
+    } else {
+      // --- Start Deactivation Flow ---
+      showGameModeDeactivationDialog();
+    }
+  };
+
+  const cancelGameModeActivation = () => {
+      gameModeConfirmationArea.classList.add('hidden');
+      updateGameModeUI();
+  };
+
+  const confirmGameModeActivation = async () => {
+      const servicesToStop = [];
+      const userExclusions = [];
+
+      gameModeServiceList.querySelectorAll('.exclude-toggle').forEach(toggle => {
+          if (toggle.checked) {
+              userExclusions.push(toggle.dataset.serviceName);
+          } else {
+              servicesToStop.push(toggle.dataset.serviceName);
+          }
+      });
+      
+      gameModeState.userExclusions = userExclusions;
+
+      updateStatus('Activating Game Mode...');
+      gameModeConfirmationArea.classList.add('hidden');
+      
+      const promises = servicesToStop.map(service => 
+          window.electronAPI.systemd.stopService(service, false)
+            .then(() => logChange('Stop', service, 'Success'))
+            .catch(err => {
+              logChange('Stop', service, 'Failed');
+              console.error(`Failed to stop ${service}: ${err.message}`);
+            })
+      );
+      await Promise.all(promises);
+
+      gameModeState.isOn = true;
+      gameModeState.stoppedServices = servicesToStop;
+      saveGameModeState();
+      updateGameModeUI();
+      updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
+  };
+
+
   // --- View Switching ---
   const switchView = (viewId) => {
     navButtons.forEach(btn => {
@@ -393,7 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const isTargetView = view.id === viewId;
       view.classList.toggle('hidden', !isTargetView);
       if (isTargetView) {
-          if (viewId === 'changes-view') populateChangesList();
+          if (viewId === 'changes-view') renderChangesList();
       }
     });
   };
@@ -455,9 +644,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const hideConfirmationDialog = () => {
     confirmationDialog.classList.add('hidden');
     confirmCallback = null;
+    // Add cleanup with a delay to allow animations to finish
+    setTimeout(() => {
+        modalListContainer.classList.add('hidden');
+        modalListContainer.innerHTML = '';
+        modalContent.classList.remove('large');
+    }, 300);
   };
 
-  const showConfirmationDialog = ({ title, message, confirmText = 'Confirm', confirmClass = '', onConfirm }) => {
+  const showConfirmationDialog = ({ title, message, confirmText = 'Confirm', confirmClass = '', onConfirm, onCancel = () => {} }) => {
     modalTitle.textContent = title;
     modalMessage.innerHTML = message;
     modalConfirmBtn.textContent = confirmText;
@@ -468,6 +663,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     confirmCallback = onConfirm;
+    
+    const cancelHandler = () => {
+      hideConfirmationDialog();
+      onCancel();
+      modalCancelBtn.removeEventListener('click', cancelHandler);
+      confirmationDialog.removeEventListener('click', overlayClickHandler);
+    };
+
+    const overlayClickHandler = (e) => {
+       if (e.target === confirmationDialog) {
+          cancelHandler();
+       }
+    };
+    
+    modalCancelBtn.addEventListener('click', cancelHandler, { once: true });
+    confirmationDialog.addEventListener('click', overlayClickHandler, { once: true });
+    
     confirmationDialog.classList.remove('hidden');
   };
 
@@ -496,21 +708,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Initialization ---
   const initializeApp = async () => {
     // Modal Listeners
-    modalCancelBtn.addEventListener('click', hideConfirmationDialog);
     modalConfirmBtn.addEventListener('click', () => {
       if (typeof confirmCallback === 'function') {
         confirmCallback();
       }
       hideConfirmationDialog();
     });
-    // Also hide on clicking overlay
-    confirmationDialog.addEventListener('click', (e) => {
-        if (e.target === confirmationDialog) {
-            hideConfirmationDialog();
-        }
-    });
 
     await loadPersistentLogs();
+    gameModeState = await window.electronAPI.gamemode.getState();
+    updateGameModeUI();
 
     try {
       const hasSystemd = await window.electronAPI.systemd.check();
@@ -537,10 +744,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Event Listeners ---
   refreshBtn.addEventListener('click', loadServices);
-  refreshChangesBtn.addEventListener('click', populateChangesList);
+  refreshChangesBtn.addEventListener('click', renderChangesList);
   userServicesToggle.addEventListener('change', loadServices);
   searchInput.addEventListener('input', renderServiceListFromCache);
   clearChangesBtn.addEventListener('click', clearChanges);
+  searchChangesInput.addEventListener('input', renderChangesList);
+
+  changeFilters.addEventListener('click', (e) => {
+    if (e.target.matches('.filter-btn')) {
+      changeFilters.querySelectorAll('.filter-btn').forEach(btn => btn.setAttribute('aria-pressed', 'false'));
+      e.target.setAttribute('aria-pressed', 'true');
+      renderChangesList();
+    }
+  });
 
   liveUpdateServicesToggle.addEventListener('change', handleLiveUpdateToggle);
   liveUpdateChangesToggle.addEventListener('change', handleLiveUpdateToggle);
@@ -550,6 +766,10 @@ document.addEventListener('DOMContentLoaded', () => {
       switchView(button.dataset.view);
     });
   });
+
+  gameModeToggle.addEventListener('change', handleGameModeToggle);
+  gameModeCancelBtn.addEventListener('click', cancelGameModeActivation);
+  gameModeConfirmBtn.addEventListener('click', confirmGameModeActivation);
   
   initializeApp();
 });

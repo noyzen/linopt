@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   systemd: {
     check: () => ipcRenderer.invoke('systemd:check'),
     getServices: (includeUser) => ipcRenderer.invoke('systemd:get-services', includeUser),
+    getOptimizableServices: () => ipcRenderer.invoke('systemd:get-optimizable-services'),
     enableService: (service, isUser) => ipcRenderer.invoke('systemd:enable-service', { service, isUser }),
     disableService: (service, isUser) => ipcRenderer.invoke('systemd:disable-service', { service, isUser }),
     startService: (service, isUser) => ipcRenderer.invoke('systemd:start-service', { service, isUser }),
@@ -32,4 +33,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: () => ipcRenderer.invoke('logs:get'),
     set: (logs) => ipcRenderer.invoke('logs:set', logs),
   },
+
+  // Game Mode functions
+  gamemode: {
+    getState: () => ipcRenderer.invoke('gamemode:get-state'),
+    setState: (state) => ipcRenderer.invoke('gamemode:set-state', state),
+  }
 });

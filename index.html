@@ -32,6 +32,7 @@
     <nav class="app-nav">
       <button id="nav-services-btn" class="nav-btn active" data-view="services-view">Services</button>
       <button id="nav-changes-btn" class="nav-btn" data-view="changes-view">Changes</button>
+      <button id="nav-gamemode-btn" class="nav-btn" data-view="gamemode-view">Game Mode</button>
     </nav>
 
     <!-- Services View -->
@@ -94,7 +95,18 @@
     <div id="changes-view" class="app-view hidden">
       <header class="app-header">
         <div class="header-controls-left">
-          <h1>Recent Changes</h1>
+          <div class="search-container">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="search" id="search-changes-input" placeholder="Filter changes...">
+          </div>
+           <div id="change-filters" class="change-filters">
+            <button class="filter-btn" data-filter="all" aria-pressed="true">All</button>
+            <button class="filter-btn" data-filter="Start" aria-pressed="false">Start</button>
+            <button class="filter-btn" data-filter="Stop" aria-pressed="false">Stop</button>
+            <button class="filter-btn" data-filter="Enable" aria-pressed="false">Enable</button>
+            <button class="filter-btn" data-filter="Disable" aria-pressed="false">Disable</button>
+            <button class="filter-btn" data-filter="Failed" aria-pressed="false">Failed</button>
+          </div>
         </div>
         <div class="header-controls-right">
           <div class="toggle-container header-toggle">
@@ -121,11 +133,56 @@
         <div class="empty-state hidden" data-empty-for="change-list">
           <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
           <h2>No Changes Logged</h2>
-          <p>Actions you perform on services will be recorded here.</p>
+          <p>Your search returned no results, or no actions have been logged.</p>
         </div>
       </div>
     </div>
 
+    <!-- Game Mode View -->
+    <div id="gamemode-view" class="app-view hidden">
+        <div class="gamemode-container">
+            <div class="gamemode-toggle-wrapper">
+                <input type="checkbox" id="gamemode-toggle-checkbox" class="gamemode-toggle-checkbox">
+                <label for="gamemode-toggle-checkbox" class="gamemode-toggle-label">
+                    <div class="gamemode-toggle-handle">
+                        <svg class="gamemode-icon-off" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                        <svg class="gamemode-icon-on" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg>
+                    </div>
+                </label>
+            </div>
+            <div id="gamemode-status" class="gamemode-status">
+                <div id="gamemode-active-banner" class="gamemode-active-banner hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg>
+                    <div class="banner-content">
+                        <h4>Game Mode is Active!</h4>
+                        <p>For the best performance, consider closing Linopt while you play.</p>
+                    </div>
+                </div>
+                <h2 id="gamemode-status-title">Game Mode is Inactive</h2>
+                <p id="gamemode-status-description">Click the switch to temporarily stop non-essential services and optimize your system for gaming.</p>
+            </div>
+            <div id="gamemode-confirmation-area" class="gamemode-confirmation-area hidden">
+                 <div class="list-container">
+                    <div id="gamemode-service-list" class="list-content">
+                        <!-- Optimizable services will be dynamically inserted here -->
+                    </div>
+                    <div id="gamemode-loader" class="hidden">
+                      <div class="spinner"></div>
+                      <p>Scanning for optimizable services...</p>
+                    </div>
+                     <div class="empty-state hidden" data-empty-for="gamemode-service-list">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        <h2>All Clear!</h2>
+                        <p>No running, non-essential services were found to optimize.</p>
+                      </div>
+                </div>
+                <div class="gamemode-actions">
+                    <button id="gamemode-cancel-btn">Cancel</button>
+                    <button id="gamemode-confirm-btn">Activate Game Mode</button>
+                </div>
+            </div>
+        </div>
+    </div>
   </main>
 
   <!-- Template for a service row -->
@@ -182,6 +239,34 @@
     <h3 class="change-log-header"></h3>
   </template>
 
+  <!-- Template for a game mode service row -->
+  <template id="gamemode-service-row-template">
+      <div class="gamemode-service-row">
+          <span class="service-name"></span>
+          <div class="toggle-container">
+              <span class="toggle-label">Keep running</span>
+              <label class="toggle-switch">
+                  <input type="checkbox" class="exclude-toggle" aria-label="Keep this service running">
+                  <span class="slider"></span>
+              </label>
+          </div>
+      </div>
+  </template>
+
+  <!-- Template for a restore service row in modal -->
+  <template id="restore-service-row-template">
+    <div class="restore-service-row">
+      <span class="service-name"></span>
+      <div class="toggle-container">
+        <label class="toggle-switch">
+          <input type="checkbox" class="restore-toggle" checked aria-label="Restore this service">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  </template>
+
+
   <!-- Confirmation Dialog -->
   <div id="confirmation-dialog" class="modal-overlay hidden">
     <div class="modal-content">
@@ -190,6 +275,9 @@
       </div>
       <div class="modal-body">
         <p id="modal-message">Are you sure you want to proceed?</p>
+        <div id="modal-list-container" class="modal-list-container hidden">
+          <!-- Dynamically populated list -->
+        </div>
       </div>
       <div class="modal-footer">
         <button id="modal-cancel-btn">Cancel</button>
