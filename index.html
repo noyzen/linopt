@@ -29,7 +29,6 @@
   <main class="container">
     <nav class="app-nav">
       <button id="nav-services-btn" class="nav-btn active" data-view="services-view">Services</button>
-      <button id="nav-snapshots-btn" class="nav-btn" data-view="snapshots-view">Snapshots</button>
       <button id="nav-changes-btn" class="nav-btn" data-view="changes-view">Changes</button>
     </nav>
 
@@ -70,27 +69,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Snapshots View -->
-    <div id="snapshots-view" class="app-view hidden">
-      <header class="app-header">
-        <h1>Configuration Snapshots</h1>
-        <button id="create-snapshot-btn" aria-label="Create New Snapshot">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-          <span>Create New Snapshot</span>
-        </button>
-      </header>
-      <div id="snapshot-list-container" class="list-container">
-        <div id="snapshot-list" class="list-content">
-          <!-- Snapshots will be dynamically inserted here -->
-        </div>
-        <div class="empty-state hidden" data-empty-for="snapshot-list">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>
-          <h2>No Snapshots Yet</h2>
-          <p>Create a snapshot to save your current service configuration.</p>
-        </div>
-      </div>
-    </div>
     
     <!-- Changes View -->
     <div id="changes-view" class="app-view hidden">
@@ -114,10 +92,6 @@
     </div>
 
   </main>
-
-  <footer id="status-bar">
-    <span id="status-text">Ready</span>
-  </footer>
 
   <!-- Template for a service row -->
   <template id="service-row-template">
@@ -152,23 +126,6 @@
     </div>
   </template>
 
-  <!-- Template for a snapshot row -->
-  <template id="snapshot-row-template">
-      <div class="snapshot-row" role="listitem">
-        <div class="snapshot-info">
-          <div class="snapshot-name-date">
-            <span class="snapshot-name"></span>
-            <span class="snapshot-date"></span>
-          </div>
-          <span class="snapshot-summary"></span>
-        </div>
-        <div class="snapshot-controls">
-          <button class="btn-restore" title="Restore Snapshot">Restore</button>
-          <button class="btn-delete" title="Delete Snapshot">Delete</button>
-        </div>
-      </div>
-  </template>
-  
   <!-- Template for a change log row -->
   <template id="change-row-template">
     <div class="change-row" role="listitem">
@@ -183,6 +140,26 @@
       </div>
     </div>
   </template>
+
+  <!-- Confirmation Dialog -->
+  <div id="confirmation-dialog" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title">Confirm Action</h2>
+      </div>
+      <div class="modal-body">
+        <p id="modal-message">Are you sure you want to proceed?</p>
+      </div>
+      <div class="modal-footer">
+        <button id="modal-cancel-btn">Cancel</button>
+        <button id="modal-confirm-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <footer id="status-bar">
+    <span id="status-text">Ready</span>
+  </footer>
 
   <script defer src="./renderer.js"></script>
 </body>

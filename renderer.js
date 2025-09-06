@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- STATE ---
   let allServicesCache = [];
   let changesLog = [];
+  let confirmCallback = null;
 
   // --- DOM Elements ---
   const serviceList = document.getElementById('service-list');
@@ -18,22 +19,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const navButtons = document.querySelectorAll('.nav-btn');
   const appViews = document.querySelectorAll('.app-view');
 
-  // Snapshots
-  const snapshotList = document.getElementById('snapshot-list');
-  const snapshotRowTemplate = document.getElementById('snapshot-row-template');
-  const createSnapshotBtn = document.getElementById('create-snapshot-btn');
-
   // Changes
   const changeList = document.getElementById('change-list');
   const changeRowTemplate = document.getElementById('change-row-template');
   const clearChangesBtn = document.getElementById('clear-changes-btn');
 
-  // --- Window controls ---
+  // Window controls
   const minimizeBtn = document.getElementById('min-btn');
   const maximizeBtn = document.getElementById('max-btn');
   const closeBtn = document.getElementById('close-btn');
   const maxIcon = document.getElementById('max-icon');
   const restoreIcon = document.getElementById('restore-icon');
+
+  // Modal Dialog
+  const confirmationDialog = document.getElementById('confirmation-dialog');
+  const modalTitle = document.getElementById('modal-title');
+  const modalMessage = document.getElementById('modal-message');
+  const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+  const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
   minimizeBtn.addEventListener('click', () => window.electronAPI.minimizeWindow());
   maximizeBtn.addEventListener('click', () => window.electronAPI.maximizeWindow());
@@ -221,6 +224,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>`;
       case 'restart':
         return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
+      case 'failed':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+      case 'detected':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
       default:
         return '';
     }
@@ -242,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const timeEl = changeRow.querySelector('.change-time');
 
       infoEl.dataset.action = log.action;
-      iconEl.innerHTML = getActionIcon(log.action);
+      iconEl.innerHTML = getActionIcon(log.status === 'Detected' ? log.action : log.action);
       actionEl.textContent = log.action;
       serviceEl.textContent = log.service;
       statusEl.textContent = log.status;
@@ -261,128 +268,17 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const clearChanges = () => {
-    if (confirm('Are you sure you want to clear the change log?')) {
-      changesLog = [];
-      populateChangesList();
-      updateStatus('Change log cleared.');
-    }
-  };
-
-  // --- Snapshot Logic ---
-  const populateSnapshotList = (snapshots) => {
-    snapshotList.innerHTML = '';
-    toggleEmptyState('snapshot-list', !snapshots || snapshots.length === 0);
-
-    if (!snapshots || snapshots.length === 0) return;
-
-    snapshots.forEach((snapshot) => {
-      const snapshotRow = snapshotRowTemplate.content.cloneNode(true);
-      const nameEl = snapshotRow.querySelector('.snapshot-name');
-      const dateEl = snapshotRow.querySelector('.snapshot-date');
-      const summaryEl = snapshotRow.querySelector('.snapshot-summary');
-      const restoreBtn = snapshotRow.querySelector('.btn-restore');
-      const deleteBtn = snapshotRow.querySelector('.btn-delete');
-      
-      const date = new Date(snapshot.id);
-      nameEl.textContent = snapshot.name;
-      dateEl.textContent = date.toLocaleDateString();
-
-      const enabledCount = snapshot.services.filter(s => s.unit_file_state === 'enabled').length;
-      summaryEl.textContent = `${snapshot.services.length} services: ${enabledCount} enabled`;
-
-      restoreBtn.addEventListener('click', () => handleRestoreSnapshot(snapshot));
-      deleteBtn.addEventListener('click', async () => {
-        if (confirm(`Are you sure you want to delete the snapshot "${snapshot.name}"? This action cannot be undone.`)) {
-          await window.electronAPI.snapshots.delete(snapshot.id);
-          loadSnapshots();
-        }
-      });
-
-      snapshotList.appendChild(snapshotRow);
+    showConfirmationDialog({
+      title: 'Clear Change Log',
+      message: 'Are you sure you want to clear the change log? This action cannot be undone.',
+      confirmText: 'Clear Log',
+      confirmClass: 'btn-danger',
+      onConfirm: () => {
+        changesLog = [];
+        populateChangesList();
+        updateStatus('Change log cleared.');
+      }
     });
-  };
-
-  const loadSnapshots = async () => {
-    const snapshots = await window.electronAPI.snapshots.get();
-    populateSnapshotList(snapshots);
-  };
-
-  const handleCreateSnapshot = async () => {
-    if (allServicesCache.length === 0) {
-      updateStatus('Cannot create snapshot, no services loaded.', true);
-      alert('Cannot create a snapshot because no services have been loaded. Please refresh the services list first.');
-      return;
-    }
-    
-    const snapshotName = `Snapshot ${new Date().toLocaleString()}`;
-
-    const snapshot = {
-      id: Date.now(),
-      name: snapshotName,
-      services: allServicesCache.map(s => ({
-        unit: s.unit,
-        unit_file_state: s.unit_file_state,
-      })),
-    };
-    await window.electronAPI.snapshots.save(snapshot);
-    updateStatus('Snapshot created successfully.', false);
-    switchView('snapshots-view');
-  };
-
-  const handleRestoreSnapshot = async (snapshot) => {
-    updateStatus('Analyzing snapshot for restoration...');
-    
-    let changesToApply = { enable: [], disable: [] };
-    const currentServiceMap = new Map(allServicesCache.map(s => [s.unit, s]));
-
-    for (const serviceInSnapshot of snapshot.services) {
-        const currentService = currentServiceMap.get(serviceInSnapshot.unit);
-        if (currentService && currentService.unit_file_state !== serviceInSnapshot.unit_file_state) {
-            if (serviceInSnapshot.unit_file_state === 'enabled') {
-                changesToApply.enable.push(serviceInSnapshot.unit);
-            } else {
-                changesToApply.disable.push(serviceInSnapshot.unit);
-            }
-        }
-    }
-
-    if (changesToApply.enable.length === 0 && changesToApply.disable.length === 0) {
-        alert('No changes needed. The current service configuration already matches the snapshot.');
-        updateStatus('Restore not needed.');
-        return;
-    }
-
-    const confirmationMessage = `This will restore the snapshot "${snapshot.name}".
-    
-The following changes will be applied to your system's boot configuration:
-  • Enable: ${changesToApply.enable.length} service(s)
-  • Disable: ${changesToApply.disable.length} service(s)
-  
-Are you sure you want to proceed?`;
-
-    if (!confirm(confirmationMessage)) {
-      updateStatus('Restore cancelled by user.');
-      return;
-    }
-    
-    updateStatus('Starting restore process...');
-    let changesMade = 0;
-    
-    const enablePromises = changesToApply.enable.map(service => 
-      window.electronAPI.systemd.enableService(service)
-        .then(() => { logChange('Enable', service, 'Success'); changesMade++; })
-        .catch(err => { logChange('Enable', service, 'Failed'); console.error(`Failed to enable ${service}:`, err); })
-    );
-
-    const disablePromises = changesToApply.disable.map(service => 
-      window.electronAPI.systemd.disableService(service)
-        .then(() => { logChange('Disable', service, 'Success'); changesMade++; })
-        .catch(err => { logChange('Disable', service, 'Failed'); console.error(`Failed to disable ${service}:`, err); })
-    );
-
-    await Promise.all([...enablePromises, ...disablePromises]);
-
-    updateStatus(`Restore complete. ${changesMade} services updated. Refresh the list to see changes.`, false);
   };
   
   // --- View Switching ---
@@ -395,7 +291,6 @@ Are you sure you want to proceed?`;
       const isTargetView = view.id === viewId;
       view.classList.toggle('hidden', !isTargetView);
       if (isTargetView) {
-          if (viewId === 'snapshots-view') loadSnapshots();
           if (viewId === 'changes-view') populateChangesList();
       }
     });
@@ -404,23 +299,66 @@ Are you sure you want to proceed?`;
   // --- Real-time Change Detection ---
   const interpretServiceChange = ({ unit, oldState, newState }) => {
       let action = null;
-      // From not running to running
+      // Started: Any non-active state -> 'active' state
       if (oldState.active !== 'active' && newState.active === 'active') {
           action = 'Start';
       } 
-      // From running to not running
-      else if (oldState.active === 'active' && newState.active !== 'active') {
+      // Stopped: 'active' state -> 'inactive' state (graceful stop)
+      else if (oldState.active === 'active' && newState.active === 'inactive') {
           action = 'Stop';
       }
-      // Can add more granular logic here later if needed
+      // Failed: Any state -> 'failed' state
+      else if (newState.active === 'failed' && oldState.active !== 'failed') {
+         action = 'Failed';
+      }
       
       if (action) {
           logChange(action, unit, 'Detected');
       }
   };
 
+  // --- Modal Dialog Logic ---
+  const hideConfirmationDialog = () => {
+    confirmationDialog.classList.add('hidden');
+    modalCancelBtn.classList.remove('hidden'); // Ensure cancel is visible for next time
+    confirmCallback = null; // Clear callback
+  };
+
+  const showConfirmationDialog = ({ title, message, confirmText = 'Confirm', confirmClass = '', onConfirm }) => {
+    modalTitle.textContent = title;
+    modalMessage.innerHTML = message; // Use innerHTML to allow for basic formatting
+    modalConfirmBtn.textContent = confirmText;
+    modalConfirmBtn.className = '';
+    if (confirmClass) {
+      modalConfirmBtn.classList.add(confirmClass);
+    }
+    
+    confirmCallback = onConfirm;
+    confirmationDialog.classList.remove('hidden');
+  };
+
+  const showAlert = ({ title, message }) => {
+    modalTitle.textContent = title;
+    modalMessage.innerHTML = message;
+    modalConfirmBtn.textContent = 'OK';
+    modalConfirmBtn.className = '';
+    modalCancelBtn.classList.add('hidden');
+    
+    confirmCallback = () => {}; // Dummy callback to just close
+    confirmationDialog.classList.remove('hidden');
+  };
+
   // --- Initialization ---
   const initializeApp = async () => {
+    // Modal Listeners
+    modalCancelBtn.addEventListener('click', hideConfirmationDialog);
+    modalConfirmBtn.addEventListener('click', () => {
+      if (typeof confirmCallback === 'function') {
+        confirmCallback();
+      }
+      hideConfirmationDialog();
+    });
+
     try {
       const hasSystemd = await window.electronAPI.systemd.check();
       if (!hasSystemd) {
@@ -430,7 +368,6 @@ Are you sure you want to proceed?`;
         return;
       }
       await loadServices();
-      await loadSnapshots();
       populateChangesList();
       
       // Start listening for real-time changes from the main process
@@ -450,7 +387,6 @@ Are you sure you want to proceed?`;
   // --- Event Listeners ---
   refreshBtn.addEventListener('click', loadServices);
   searchInput.addEventListener('input', handleSearch);
-  createSnapshotBtn.addEventListener('click', handleCreateSnapshot);
   clearChangesBtn.addEventListener('click', clearChanges);
 
   navButtons.forEach(button => {

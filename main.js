@@ -198,27 +198,6 @@ app.whenReady().then(() => {
   ipcMain.handle('systemd:restart-service', async (_, service) => {
     return runCommand(`systemctl restart ${sanitize(service)}`);
   });
-  
-  // --- Snapshot IPC Handlers ---
-  
-  ipcMain.handle('snapshots:get', () => {
-    return store.get('snapshots', []);
-  });
-
-  ipcMain.handle('snapshots:save', (_, snapshot) => {
-    const snapshots = store.get('snapshots', []);
-    snapshots.unshift(snapshot); // Add to the beginning of the array
-    store.set('snapshots', snapshots);
-    return snapshots;
-  });
-
-  ipcMain.handle('snapshots:delete', (_, snapshotId) => {
-    let snapshots = store.get('snapshots', []);
-    snapshots = snapshots.filter(s => s.id !== snapshotId);
-    store.set('snapshots', snapshots);
-    return snapshots;
-  });
-
 
   createWindow();
 

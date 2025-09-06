@@ -20,11 +20,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
     restartService: (service) => ipcRenderer.invoke('systemd:restart-service', service),
     onServiceChanged: (callback) => ipcRenderer.on('systemd:service-changed', (_event, ...args) => callback(...args)),
   },
-
-  // Snapshot functions
-  snapshots: {
-    get: () => ipcRenderer.invoke('snapshots:get'),
-    save: (snapshot) => ipcRenderer.invoke('snapshots:save', snapshot),
-    delete: (snapshotId) => ipcRenderer.invoke('snapshots:delete', snapshotId),
-  }
 });
