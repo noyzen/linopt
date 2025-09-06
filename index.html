@@ -50,10 +50,19 @@
             <span class="toggle-label">Show User Services</span>
           </div>
         </div>
-        <button id="refresh-btn" aria-label="Refresh Services">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-          <span>Refresh</span>
-        </button>
+        <div class="header-controls-right">
+          <div class="toggle-container header-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" id="live-update-services-toggle" checked>
+              <span class="slider"></span>
+            </label>
+            <span class="toggle-label">Live Update</span>
+          </div>
+          <button id="refresh-btn" class="hidden" aria-label="Refresh Services">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>Refresh</span>
+          </button>
+        </div>
       </header>
       <div id="service-stats" class="service-stats-container">
         <!-- Service stats will be dynamically inserted here -->
@@ -84,11 +93,26 @@
     <!-- Changes View -->
     <div id="changes-view" class="app-view hidden">
       <header class="app-header">
-        <h1>Recent Changes</h1>
-        <button id="clear-changes-btn" aria-label="Clear Change Log">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-          <span>Clear Log</span>
-        </button>
+        <div class="header-controls-left">
+          <h1>Recent Changes</h1>
+        </div>
+        <div class="header-controls-right">
+          <div class="toggle-container header-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" id="live-update-changes-toggle" checked>
+              <span class="slider"></span>
+            </label>
+            <span class="toggle-label">Live Update</span>
+          </div>
+           <button id="refresh-changes-btn" class="hidden" aria-label="Refresh Change Log">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>Refresh</span>
+          </button>
+          <button id="clear-changes-btn" aria-label="Clear Change Log">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            <span>Clear Log</span>
+          </button>
+        </div>
       </header>
       <div id="change-list-container" class="list-container">
         <div id="change-list" class="list-content">
@@ -151,6 +175,11 @@
         <span class="change-time"></span>
       </div>
     </div>
+  </template>
+
+  <!-- Template for a change log date header -->
+  <template id="change-header-template">
+    <h3 class="change-log-header"></h3>
   </template>
 
   <!-- Confirmation Dialog -->

@@ -202,7 +202,7 @@ main.container {
 h1 { font-size: 1.75rem; font-weight: 600; }
 
 /* Search and Action Buttons */
-.header-controls-left {
+.header-controls-left, .header-controls-right {
   display: flex;
   align-items: center;
   gap: 1.5rem;
@@ -229,14 +229,14 @@ h1 { font-size: 1.75rem; font-weight: 600; }
 
 button { font-family: var(--font-family); }
 
-#refresh-btn, #clear-changes-btn {
+#refresh-btn, #clear-changes-btn, #refresh-changes-btn {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.6rem 1.2rem; background-color: var(--container-color);
   color: var(--text-color); border: 1px solid var(--border-color);
   border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500;
   transition: all 0.2s ease;
 }
-#refresh-btn:hover, #clear-changes-btn:hover {
+#refresh-btn:hover, #clear-changes-btn:hover, #refresh-changes-btn:hover {
   border-color: var(--primary-color); color: var(--primary-color);
   transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
@@ -373,6 +373,24 @@ input:checked + .slider:before { transform: translateX(18px); }
 .change-service { font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace; font-size: 0.9rem; }
 .change-meta { display: flex; align-items: center; gap: 1rem; font-size: 0.8rem; color: var(--text-color-muted); }
 .change-status { font-weight: 500; }
+
+/* Change Log Header */
+.change-log-header {
+  padding: 1rem 1.5rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-color-muted);
+  background-color: var(--container-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  background-color: rgba(33, 35, 40, 0.8);
+}
 
 /* Set color on the container, which is inherited by the icon (via currentColor) and action text */
 .change-info[data-action="Enable"],

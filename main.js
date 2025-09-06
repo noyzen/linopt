@@ -7,7 +7,7 @@ const fs = require('fs').promises;
 const store = new Store();
 
 // --- Service Watcher State ---
-let serviceWatcherInterval;
+let serviceWatcherInterval = null;
 let previousSystemServicesState = new Map();
 let previousUserServicesState = new Map();
 
@@ -70,11 +70,25 @@ async function initializeWatcherState() {
   }
 }
 
+function stopServiceWatcher() {
+  if (serviceWatcherInterval) {
+    clearInterval(serviceWatcherInterval);
+    serviceWatcherInterval = null;
+    console.log('Service watcher stopped.');
+  }
+}
+
 function startServiceWatcher(win) {
+  if (serviceWatcherInterval) {
+    console.log('Service watcher is already running.');
+    return;
+  }
+  console.log('Starting service watcher...');
+
   initializeWatcherState().then(() => {
     serviceWatcherInterval = setInterval(async () => {
       if (win.isDestroyed()) {
-        clearInterval(serviceWatcherInterval);
+        stopServiceWatcher();
         return;
       }
       
@@ -164,6 +178,23 @@ app.whenReady().then(() => {
     return win ? win.isMaximized() : false;
   });
 
+  // --- Watcher IPC Handlers ---
+  ipcMain.on('watcher:start', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) startServiceWatcher(win);
+  });
+  ipcMain.on('watcher:stop', () => {
+    stopServiceWatcher();
+  });
+
+  // --- Change Log IPC Handlers ---
+  ipcMain.handle('logs:get', () => {
+    return store.get('changesLog', []);
+  });
+  ipcMain.handle('logs:set', (_, logs) => {
+    store.set('changesLog', logs);
+  });
+
   // --- SystemD IPC Handlers ---
 
   ipcMain.handle('systemd:check', async () => {
@@ -249,9 +280,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (serviceWatcherInterval) {
-    clearInterval(serviceWatcherInterval);
-  }
+  stopServiceWatcher();
   if (process.platform !== 'darwin') {
     app.quit();
   }

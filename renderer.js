@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let allServicesCache = [];
   let changesLog = [];
   let confirmCallback = null;
+  const LOG_LIMIT = 500; // Cap logs to prevent performance issues
 
   // --- DOM Elements ---
   const serviceList = document.getElementById('service-list');
@@ -15,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('search-input');
   const serviceStatsContainer = document.getElementById('service-stats');
   const userServicesToggle = document.getElementById('user-services-toggle');
+  const liveUpdateServicesToggle = document.getElementById('live-update-services-toggle');
   
   // Navigation
   const navButtons = document.querySelectorAll('.nav-btn');
@@ -23,7 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Changes
   const changeList = document.getElementById('change-list');
   const changeRowTemplate = document.getElementById('change-row-template');
+  const changeHeaderTemplate = document.getElementById('change-header-template');
   const clearChangesBtn = document.getElementById('clear-changes-btn');
+  const liveUpdateChangesToggle = document.getElementById('live-update-changes-toggle');
+  const refreshChangesBtn = document.getElementById('refresh-changes-btn');
 
   // Window controls
   const minimizeBtn = document.getElementById('min-btn');
@@ -243,6 +248,30 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   
   // --- Change Log Logic ---
+
+  const loadPersistentLogs = async () => {
+    try {
+      const storedLogs = await window.electronAPI.logs.get();
+      // Revive date objects from their ISO string representation
+      changesLog = storedLogs.map(log => ({
+        ...log,
+        timestamp: new Date(log.timestamp),
+      })).sort((a, b) => b.timestamp - a.timestamp); // Ensure newest first
+    } catch (error) {
+      console.error("Failed to load persistent logs:", error);
+      changesLog = [];
+    }
+  };
+
+  let saveTimeout;
+  const savePersistentLogs = () => {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      // The Date objects will be converted to ISO strings automatically by the IPC mechanism
+      window.electronAPI.logs.set(changesLog);
+    }, 1000); // Debounce saves by 1 second
+  };
+
   const getActionIcon = (action) => {
     switch (action.toLowerCase()) {
       case 'add':
@@ -268,17 +297,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const getRelativeDateString = (date) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const logDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+    if (logDate.getTime() === today.getTime()) return 'Today';
+    if (logDate.getTime() === yesterday.getTime()) return 'Yesterday';
+    
+    const oneWeekAgo = new Date(today);
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    if (logDate > oneWeekAgo) {
+      return logDate.toLocaleDateString(undefined, { weekday: 'long' }); // e.g., "Monday"
+    }
+    
+    // Default to a specific date format
+    return logDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
   const populateChangesList = () => {
     changeList.innerHTML = '';
     toggleEmptyState('change-list', changesLog.length === 0);
 
     if (changesLog.length === 0) return;
 
-    // Create a fragment to batch DOM insertions
+    let lastHeader = null;
     const fragment = document.createDocumentFragment();
+
     changesLog.forEach((log) => {
+      const dateHeaderString = getRelativeDateString(log.timestamp);
+      if (dateHeaderString !== lastHeader) {
+          const headerTpl = changeHeaderTemplate.content.cloneNode(true);
+          const headerEl = headerTpl.querySelector('.change-log-header');
+          headerEl.textContent = dateHeaderString;
+          fragment.appendChild(headerTpl);
+          lastHeader = dateHeaderString;
+      }
+
       const changeRow = changeRowTemplate.content.cloneNode(true);
-      const rowElement = changeRow.querySelector('.change-row');
       const infoEl = changeRow.querySelector('.change-info');
       const iconEl = changeRow.querySelector('.change-icon');
       const actionEl = changeRow.querySelector('.change-action');
@@ -294,30 +352,32 @@ document.addEventListener('DOMContentLoaded', () => {
       statusEl.dataset.status = log.status;
       timeEl.textContent = log.timestamp.toLocaleTimeString();
       
-      fragment.appendChild(rowElement);
+      fragment.appendChild(changeRow);
     });
     changeList.appendChild(fragment);
   };
 
   const logChange = (action, service, status) => {
     changesLog.unshift({ action, service, status, timestamp: new Date() });
-    if (changesLog.length > 200) {
-      changesLog.pop(); // Keep the log from getting too large
+    if (changesLog.length > LOG_LIMIT) {
+      changesLog.length = LOG_LIMIT; // Prune old logs to maintain performance
     }
     if(document.getElementById('changes-view').classList.contains('hidden') === false) {
       populateChangesList();
     }
+    savePersistentLogs();
   };
 
   const clearChanges = () => {
     showConfirmationDialog({
       title: 'Clear Change Log',
-      message: 'Are you sure you want to clear the change log? This action cannot be undone.',
+      message: 'Are you sure you want to clear the entire change log? This action cannot be undone.',
       confirmText: 'Clear Log',
       confirmClass: 'btn-danger',
       onConfirm: () => {
         changesLog = [];
         populateChangesList();
+        savePersistentLogs(); // Persist the empty array
         updateStatus('Change log cleared.');
       }
     });
@@ -411,6 +471,28 @@ document.addEventListener('DOMContentLoaded', () => {
     confirmationDialog.classList.remove('hidden');
   };
 
+  // --- Live Update Toggle Logic ---
+  const handleLiveUpdateToggle = (event) => {
+    const isEnabled = event.target.checked;
+    
+    // Sync both toggles
+    liveUpdateServicesToggle.checked = isEnabled;
+    liveUpdateChangesToggle.checked = isEnabled;
+    
+    // Show/hide refresh buttons
+    refreshBtn.classList.toggle('hidden', isEnabled);
+    refreshChangesBtn.classList.toggle('hidden', isEnabled);
+    
+    if (isEnabled) {
+      window.electronAPI.watcher.start();
+      updateStatus('Live updates enabled.');
+      loadServices(); // Refresh on re-enabling
+    } else {
+      window.electronAPI.watcher.stop();
+      updateStatus('Live updates disabled. Use refresh button for manual updates.');
+    }
+  };
+
   // --- Initialization ---
   const initializeApp = async () => {
     // Modal Listeners
@@ -428,6 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    await loadPersistentLogs();
 
     try {
       const hasSystemd = await window.electronAPI.systemd.check();
@@ -438,7 +521,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       await loadServices();
-      populateChangesList();
       
       window.electronAPI.systemd.onServiceChanged(handleServiceEvent);
 
@@ -455,9 +537,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Event Listeners ---
   refreshBtn.addEventListener('click', loadServices);
+  refreshChangesBtn.addEventListener('click', populateChangesList);
   userServicesToggle.addEventListener('change', loadServices);
   searchInput.addEventListener('input', renderServiceListFromCache);
   clearChangesBtn.addEventListener('click', clearChanges);
+
+  liveUpdateServicesToggle.addEventListener('change', handleLiveUpdateToggle);
+  liveUpdateChangesToggle.addEventListener('change', handleLiveUpdateToggle);
 
   navButtons.forEach(button => {
     button.addEventListener('click', () => {
