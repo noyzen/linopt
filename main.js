@@ -250,111 +250,131 @@ app.whenReady().then(() => {
 
     try {
       const systemCommands = [runCommand(systemListUnitsCmd), runCommand(systemListUnitFilesCmd)];
-      // If user services are requested, prepare the commands. Otherwise, resolve with empty arrays.
-      const userCommands = includeUserServices 
-        ? [runCommand(userListUnitsCmd).catch(() => '[]'), runCommand(userListUnitFilesCmd).catch(() => '[]')] 
-        : [Promise.resolve('[]'), Promise.resolve('[]')];
+      if (includeUserServices) {
+        systemCommands.push(runCommand(userListUnitsCmd), runCommand(userListUnitFilesCmd));
+      }
 
-      const [systemUnitsStdout, systemUnitFilesStdout, userUnitsStdout, userUnitFilesStdout] = await Promise.all([...systemCommands, ...userCommands]);
-
-      const systemServices = JSON.parse(systemUnitsStdout);
-      const systemUnitFiles = JSON.parse(systemUnitFilesStdout);
-      const userServices = JSON.parse(userUnitsStdout);
-      const userUnitFiles = JSON.parse(userUnitFilesStdout);
+      const results = await Promise.all(systemCommands.map(p => p.catch(() => '[]')));
       
-      const mergeStates = (services, unitFiles, isUser) => {
+      const systemServices = JSON.parse(results[0]);
+      const systemUnitFiles = JSON.parse(results[1]);
+
+      let userServices = [];
+      let userUnitFiles = [];
+      if (includeUserServices) {
+        userServices = JSON.parse(results[2]);
+        userUnitFiles = JSON.parse(results[3]);
+      }
+      
+      const processServices = (services, unitFiles, isUser) => {
         const unitFileStateMap = new Map(unitFiles.map(file => [file.unit_file, file.state]));
         return services.map(service => ({
           ...service,
-          unit_file_state: unitFileStateMap.get(service.unit) || service.unit_file_state || 'static',
-          isUser,
+          unit_file_state: unitFileStateMap.get(service.unit) || 'static',
+          isUser: isUser
         }));
       };
 
-      const mergedSystemServices = mergeStates(systemServices, systemUnitFiles, false);
-      const mergedUserServices = includeUserServices ? mergeStates(userServices, userUnitFiles, true) : [];
+      const combinedSystemServices = processServices(systemServices, systemUnitFiles, false);
+      const combinedUserServices = processServices(userServices, userUnitFiles, true);
 
-      return [...mergedSystemServices, ...mergedUserServices];
+      return [...combinedSystemServices, ...combinedUserServices];
     } catch (error) {
-      console.error('Failed to get services:', error.message);
-      throw new Error(`Failed to list services: ${error.message}`);
+      console.error('Error fetching services:', error.message);
+      throw new Error(`Failed to get services: ${error.message}`);
     }
   });
   
-  // A conservative blocklist of services/patterns essential for a desktop session.
-  // Expanded to be more aggressive in stopping non-critical services for Game Mode.
-  const CRITICAL_SERVICE_PATTERNS = [
-      // Core system and session services
-      /^systemd-/, /^user@/, /^session-/, /display-manager\.service$/,
-      /\.socket$/, /\.mount$/, /\.target$/, /\.slice$/,
-      // D-Bus and PolicyKit
-      /dbus/, /polkit/,
-      // Display managers
-      /gdm/, /sddm/, /lightdm/,
-      // Core networking
-      /NetworkManager/, /wpa_supplicant/, /systemd-resolved/,
-      // Core audio stack
-      /pipewire/, /pulseaudio/, /wireplumber/, /alsa-/,
-      // Bluetooth for controllers/headsets
-      /bluetooth/,
-      // Desktop Environment core components
-      /gnome-/, /kde/, /plasma-/, /xdg-/, /iwd/,
-      // Power management
-      /upower/, /power-profiles-daemon/,
-      // Hardware management
-      /udev/,
-      // Graphics drivers
-      /nvidia/, /amd/, /intel/,
-      // Critical login/auth
-      /accounts-daemon/,
-  ];
-
+  const SERVICE_HINTS = {
+    'baloo': 'KDE file indexing',
+    'tracker-miner': 'GNOME file indexing',
+    'plocate-updatedb': 'File indexing service',
+    'mlocate': 'File indexing service',
+    'cups': 'Printing service',
+    'cups-browsed': 'Network printer discovery',
+    'saned': 'Scanner service',
+    'bluetooth': 'Bluetooth connectivity',
+    'avahi-daemon': 'Local network discovery (mDNS)',
+    'ssh': 'Remote shell access',
+    'samba': 'Windows file sharing',
+    'nfs-server': 'Network file system server',
+    'power-profiles-daemon': 'Manages power profiles (performance, balanced)',
+    'tlp': 'Advanced power management',
+    'system76-power': 'System76 laptop power management',
+    'geoclue': 'Geolocation service',
+    'modemmanager': 'Manages mobile broadband devices',
+    'upower': 'Power management and battery status',
+    'udisks2': 'Manages disks and automounting',
+    'snapper': 'Filesystem snapshot management',
+    'timeshift': 'System backup and restore',
+    'plymouth': 'Boot splash screen',
+    'protonvpn': 'ProtonVPN service',
+    'openvpn': 'OpenVPN service',
+    'windscribe': 'Windscribe VPN service',
+    'docker': 'Containerization platform',
+    'cron': 'Scheduled task execution',
+    'anacron': 'Scheduled task execution for desktops',
+  };
 
   ipcMain.handle('systemd:get-optimizable-services', async () => {
-      const listRunningCmd = 'systemctl list-units --type=service --state=running --no-pager --plain --output=json';
-      try {
-        const servicesStdout = await runCommand(listRunningCmd);
-        const runningServices = JSON.parse(servicesStdout);
+    const listRunningCmd = 'systemctl list-units --type=service --state=running --no-pager --plain --output=json';
+    try {
+      const servicesJson = await runCommand(listRunningCmd);
+      const runningServices = JSON.parse(servicesJson);
 
-        const isCritical = (serviceName) => CRITICAL_SERVICE_PATTERNS.some(pattern => pattern.test(serviceName));
+      const CRITICAL_SERVICE_PATTERNS = [
+        // Core systemd and login
+        'systemd', 'dbus', 'polkit', 'logind', 'user@',
+        // Display managers & core desktop
+        'gdm', 'sddm', 'lightdm', 'lxdm', 
+        'gnome-session', 'plasma-workspace', 'xfce4-session', 'wayland', 'x11', 'Xorg',
+        // Networking
+        'NetworkManager', 'networkd', 'wpa_supplicant', 'resolved', 'dnsmasq',
+        // Audio
+        'pipewire', 'pulseaudio', 'wireplumber', 'alsa',
+        // Graphics drivers
+        'nvidia-persistenced', 'nvidia-powerd',
+        // Hardware
+        'udev', 'modules-load',
+      ];
+      
+      const optimizableServices = runningServices
+        .map(s => s.unit)
+        .filter(unit => !CRITICAL_SERVICE_PATTERNS.some(pattern => unit.includes(pattern)))
+        .map(name => {
+          const hintKey = Object.keys(SERVICE_HINTS).find(key => name.includes(key));
+          const hint = hintKey ? SERVICE_HINTS[hintKey] : 'General system service';
+          return { name, hint };
+        })
+        .sort((a,b) => a.name.localeCompare(b.name));
 
-        const optimizableServices = runningServices
-          .map(s => s.unit)
-          .filter(name => !isCritical(name))
-          .sort();
-        
-        return optimizableServices;
-
-      } catch (error) {
-        console.error('Failed to get optimizable services:', error.message);
-        throw new Error(`Failed to list running services: ${error.message}`);
-      }
+      return optimizableServices;
+    } catch (err) {
+      console.error('Could not get optimizable services:', err.message);
+      throw err;
+    }
   });
 
 
-  // Sanitize service name to prevent command injection
-  const sanitize = (name) => {
-    if (!/^[a-zA-Z0-9.\-_@]+$/.test(name)) {
-      throw new Error(`Invalid service name format: ${name}`);
-    }
-    return name;
-  };
-  
-  // Generic handler for service control commands
-  const createServiceHandler = (commandTemplate) => {
+  const createServiceAction = (action, userFlagRequired = true) => {
     return async (_, { service, isUser }) => {
-      const userFlag = isUser ? '--user ' : '';
-      const command = commandTemplate.replace('%s', sanitize(service));
-      return runCommand(`systemctl ${userFlag}${command}`);
+      const userFlag = isUser && userFlagRequired ? '--user ' : '';
+      const command = `systemctl ${userFlag}${action} ${service}`;
+      try {
+        await runCommand(command);
+        return { success: true };
+      } catch (err) {
+        throw new Error(`Failed to ${action} ${service}: ${err.message}`);
+      }
     };
   };
 
-  ipcMain.handle('systemd:enable-service', createServiceHandler('enable %s'));
-  ipcMain.handle('systemd:disable-service', createServiceHandler('disable %s'));
-  ipcMain.handle('systemd:start-service', createServiceHandler('start %s'));
-  ipcMain.handle('systemd:stop-service', createServiceHandler('stop %s'));
-  ipcMain.handle('systemd:restart-service', createServiceHandler('restart %s'));
-
+  ipcMain.handle('systemd:enable-service', createServiceAction('enable'));
+  ipcMain.handle('systemd:disable-service', createServiceAction('disable'));
+  ipcMain.handle('systemd:start-service', createServiceAction('start'));
+  ipcMain.handle('systemd:stop-service', createServiceAction('stop'));
+  ipcMain.handle('systemd:restart-service', createServiceAction('restart'));
+  
   createWindow();
 
   app.on('activate', () => {
@@ -365,7 +385,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  stopServiceWatcher();
   if (process.platform !== 'darwin') {
     app.quit();
   }

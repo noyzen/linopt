@@ -39,12 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const gameModeStatusTitle = document.getElementById('gamemode-status-title');
   const gameModeStatusDescription = document.getElementById('gamemode-status-description');
   const gameModeActiveBanner = document.getElementById('gamemode-active-banner');
-  const gameModeConfirmationArea = document.getElementById('gamemode-confirmation-area');
+  const gameModeServicePanel = document.getElementById('gamemode-service-panel');
   const gameModeServiceList = document.getElementById('gamemode-service-list');
   const gameModeServiceRowTemplate = document.getElementById('gamemode-service-row-template');
   const gameModeLoader = document.getElementById('gamemode-loader');
-  const gameModeConfirmBtn = document.getElementById('gamemode-confirm-btn');
-  const gameModeCancelBtn = document.getElementById('gamemode-cancel-btn');
 
   // Window controls
   const minimizeBtn = document.getElementById('min-btn');
@@ -455,141 +453,96 @@ document.addEventListener('DOMContentLoaded', () => {
   const saveGameModeState = () => {
     window.electronAPI.gamemode.setState(gameModeState);
   };
+  
+  const populateGameModeServiceList = (services) => {
+      gameModeServiceList.innerHTML = '';
+      toggleEmptyState('gamemode-service-list', services.length === 0);
+
+      services.forEach(service => {
+        const row = gameModeServiceRowTemplate.content.cloneNode(true);
+        const serviceNameEl = row.querySelector('.service-name');
+        const serviceHintEl = row.querySelector('.service-hint');
+        const excludeToggle = row.querySelector('.exclude-toggle');
+
+        serviceNameEl.textContent = service.name;
+        serviceNameEl.title = service.name;
+        serviceHintEl.textContent = service.hint;
+        
+        excludeToggle.dataset.serviceName = service.name;
+        excludeToggle.checked = !gameModeState.userExclusions.includes(service.name);
+
+        excludeToggle.addEventListener('change', (e) => {
+            const serviceName = e.target.dataset.serviceName;
+            if (e.target.checked) {
+                // Keep running = NOT excluded
+                gameModeState.userExclusions = gameModeState.userExclusions.filter(s => s !== serviceName);
+            } else {
+                // Don't keep running = excluded
+                if (!gameModeState.userExclusions.includes(serviceName)) {
+                    gameModeState.userExclusions.push(serviceName);
+                }
+            }
+            saveGameModeState();
+        });
+        gameModeServiceList.appendChild(row);
+      });
+  };
+
+  const loadOptimizableServicesPanel = async () => {
+      gameModeLoader.classList.remove('hidden');
+      gameModeServiceList.innerHTML = '';
+      toggleEmptyState('gamemode-service-list', false);
+      try {
+        const services = await window.electronAPI.systemd.getOptimizableServices();
+        populateGameModeServiceList(services);
+      } catch (err) {
+        updateStatus(`Error scanning for optimizable services: ${err.message}`, true);
+        toggleEmptyState('gamemode-service-list', true); // Show empty state on error
+      } finally {
+        gameModeLoader.classList.add('hidden');
+      }
+  };
 
   const updateGameModeUI = () => {
     gameModeToggle.checked = gameModeState.isOn;
     gameModeToggle.disabled = false;
-    gameModeLoader.classList.add('hidden');
-    gameModeConfirmationArea.classList.add('hidden');
     
     if (gameModeState.isOn) {
       gameModeActiveBanner.classList.remove('hidden');
+      gameModeServicePanel.classList.add('hidden');
       gameModeStatusTitle.textContent = 'Game Mode is Active';
-      gameModeStatusDescription.classList.add('hidden');
+      gameModeStatusDescription.textContent = `Click the switch to deactivate and restart ${gameModeState.stoppedServices.length} stopped services.`;
     } else {
       gameModeActiveBanner.classList.add('hidden');
+      gameModeServicePanel.classList.remove('hidden');
       gameModeStatusTitle.textContent = 'Game Mode is Inactive';
-      gameModeStatusDescription.classList.remove('hidden');
-      gameModeStatusDescription.textContent = 'Click the switch to temporarily stop non-essential services and optimize your system for gaming.';
+      gameModeStatusDescription.textContent = 'Toggle services below and click the switch to optimize your system for gaming.';
+      loadOptimizableServicesPanel();
     }
-  };
-
-  const showGameModeDeactivationDialog = () => {
-    // Populate list of stopped services
-    modalListContainer.innerHTML = '';
-    gameModeState.stoppedServices.sort().forEach(serviceName => {
-      const row = restoreServiceRowTemplate.content.cloneNode(true);
-      const rowName = row.querySelector('.service-name');
-      const rowToggle = row.querySelector('.restore-toggle');
-      rowName.textContent = serviceName;
-      rowToggle.dataset.serviceName = serviceName;
-      rowName.title = serviceName;
-      modalListContainer.appendChild(row);
-    });
-
-    // Configure modal for service list view
-    modalMessage.classList.remove('hidden'); // Ensure message is visible
-    modalListContainer.classList.remove('hidden');
-    modalContent.classList.add('large');
-
-    showConfirmationDialog({
-      title: 'Deactivate Game Mode',
-      message: `Select the services you wish to restart (${gameModeState.stoppedServices.length} total):`,
-      confirmText: 'Restore Selected',
-      onConfirm: async () => {
-        const servicesToRestore = [];
-        modalListContainer.querySelectorAll('.restore-toggle:checked').forEach(toggle => {
-          servicesToRestore.push(toggle.dataset.serviceName);
-        });
-
-        if (servicesToRestore.length > 0) {
-            updateStatus('Restoring services...');
-            const promises = servicesToRestore.map(service => 
-              window.electronAPI.systemd.startService(service, false).catch(err => {
-                logChange('Start', service, 'Failed');
-                console.error(`Failed to restart ${service}: ${err.message}`);
-              })
-            );
-            await Promise.all(promises);
-            servicesToRestore.forEach(service => logChange('Start', service, 'Success'));
-            updateStatus(`Restored ${servicesToRestore.length} services.`);
-        }
-
-        gameModeState.isOn = false;
-        gameModeState.stoppedServices = [];
-        saveGameModeState();
-        updateGameModeUI();
-      },
-      onCancel: () => {
-        gameModeToggle.disabled = false;
-      }
-    });
   };
 
   const handleGameModeToggle = async (event) => {
     const activate = event.target.checked;
-    
-    // Visually revert and disable toggle until action is complete
-    event.target.checked = !activate; 
     event.target.disabled = true;
 
     if (activate) {
-      // --- Start Activation Flow ---
-      gameModeStatusDescription.textContent = 'Scanning for optimizable services...';
-      gameModeConfirmationArea.classList.remove('hidden');
-      gameModeLoader.classList.remove('hidden');
-      gameModeServiceList.innerHTML = '';
-      toggleEmptyState('gamemode-service-list', false);
-
-      try {
-        const optimizableServices = await window.electronAPI.systemd.getOptimizableServices();
-        gameModeLoader.classList.add('hidden');
-        
-        toggleEmptyState('gamemode-service-list', optimizableServices.length === 0);
-        gameModeConfirmBtn.disabled = optimizableServices.length === 0;
-
-        optimizableServices.forEach(serviceName => {
-            const row = gameModeServiceRowTemplate.content.cloneNode(true);
-            row.querySelector('.service-name').textContent = serviceName;
-            const excludeToggle = row.querySelector('.exclude-toggle');
-            excludeToggle.checked = gameModeState.userExclusions.includes(serviceName);
-            excludeToggle.dataset.serviceName = serviceName;
-            gameModeServiceList.appendChild(row);
-        });
-      } catch (err) {
-        updateStatus(`Error scanning services: ${err.message}`, true);
-        gameModeLoader.classList.add('hidden');
-        gameModeStatusDescription.textContent = 'Failed to scan for services. Please try again.';
-        setTimeout(() => updateGameModeUI(), 2000);
-      }
-    } else {
-      // --- Start Deactivation Flow ---
-      showGameModeDeactivationDialog();
-    }
-  };
-
-  const cancelGameModeActivation = () => {
-      gameModeConfirmationArea.classList.add('hidden');
-      updateGameModeUI();
-  };
-
-  const confirmGameModeActivation = async () => {
       const servicesToStop = [];
       const userExclusions = [];
 
+      // Read the current state of toggles to determine exclusions
       gameModeServiceList.querySelectorAll('.exclude-toggle').forEach(toggle => {
+          const serviceName = toggle.dataset.serviceName;
           if (toggle.checked) {
-              userExclusions.push(toggle.dataset.serviceName);
+            // "Keep running" is checked, so don't stop it.
           } else {
-              servicesToStop.push(toggle.dataset.serviceName);
+            servicesToStop.push(serviceName);
+            userExclusions.push(serviceName);
           }
       });
-      
       gameModeState.userExclusions = userExclusions;
 
-      updateStatus('Activating Game Mode...');
-      gameModeConfirmationArea.classList.add('hidden');
-      
+      updateStatus(`Activating Game Mode... Stopping ${servicesToStop.length} services.`);
+
       const promises = servicesToStop.map(service => 
           window.electronAPI.systemd.stopService(service, false)
             .then(() => logChange('Stop', service, 'Success'))
@@ -606,8 +559,27 @@ document.addEventListener('DOMContentLoaded', () => {
       updateGameModeUI();
       updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
       setLiveUpdateState(false);
+    } else {
+      // Deactivate
+      const servicesToRestore = gameModeState.stoppedServices;
+      if (servicesToRestore.length > 0) {
+        updateStatus(`Deactivating Game Mode... Restoring ${servicesToRestore.length} services.`);
+        const promises = servicesToRestore.map(service => 
+            window.electronAPI.systemd.startService(service, false).catch(err => {
+              logChange('Start', service, 'Failed');
+              console.error(`Failed to restart ${service}: ${err.message}`);
+            }).then(() => logChange('Start', service, 'Success'))
+        );
+        await Promise.all(promises);
+        updateStatus(`${servicesToRestore.length} services restored.`);
+      }
+      gameModeState.isOn = false;
+      gameModeState.stoppedServices = [];
+      saveGameModeState();
+      updateGameModeUI();
+      updateStatus('Game Mode deactivated.');
+    }
   };
-
 
   // --- View Switching ---
   const switchView = (viewId) => {
@@ -619,7 +591,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const isTargetView = view.id === viewId;
       view.classList.toggle('hidden', !isTargetView);
       if (isTargetView) {
-          if (viewId === 'changes-view') renderChangesList();
+          if (viewId === 'changes-view') {
+            renderChangesList();
+          } else if (viewId === 'gamemode-view') {
+            updateGameModeUI();
+          }
       }
     });
   };
@@ -810,8 +786,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   gameModeToggle.addEventListener('change', handleGameModeToggle);
-  gameModeCancelBtn.addEventListener('click', cancelGameModeActivation);
-  gameModeConfirmBtn.addEventListener('click', confirmGameModeActivation);
   
   initializeApp();
 });
