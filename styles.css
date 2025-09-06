@@ -169,33 +169,30 @@ main.container {
 .app-nav {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: 0;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 2px;
-  background: rgba(10, 10, 10, 0.3);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 3px;
+  gap: 0;
+  height: var(--title-bar-height);
   -webkit-app-region: no-drag;
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
 }
 .nav-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   background: none;
   border: none;
   color: var(--text-color-muted);
-  padding: 4px 10px;
+  padding: 0 20px;
+  height: 100%;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: 0;
   transition: all 0.2s ease;
   white-space: nowrap;
+  border-bottom: 3px solid transparent;
 }
 .nav-btn svg {
   width: 14px;
@@ -207,9 +204,8 @@ main.container {
   background-color: rgba(255, 255, 255, 0.08);
 }
 .nav-btn.active {
-  background-color: var(--primary-color);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(88, 101, 242, 0.3);
+  color: var(--text-color);
+  border-bottom-color: var(--primary-color);
 }
 
 .app-view {
@@ -336,18 +332,20 @@ h1 { font-size: 1.75rem; font-weight: 600; }
 
 button { font-family: var(--font-family); }
 
-#refresh-btn, #clear-changes-btn, #refresh-changes-btn, #export-btn {
+#refresh-btn, #clear-changes-btn, #refresh-changes-btn, #export-btn, #gamemode-reset-btn {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.6rem 1.2rem; background-color: var(--container-color);
   color: var(--text-color); border: 1px solid var(--border-color);
   border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500;
   transition: all 0.2s ease;
 }
-#refresh-btn:hover, #clear-changes-btn:hover, #refresh-changes-btn:hover, #export-btn:hover {
+#refresh-btn:hover, #export-btn:hover {
   border-color: var(--primary-color); color: var(--primary-color);
   transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
-#clear-changes-btn:hover { border-color: var(--error-color); color: var(--error-color); }
+#clear-changes-btn:hover { border-color: var(--error-color); color: var(--error-color); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+#gamemode-reset-btn:hover { border-color: var(--warning-color); color: var(--warning-color); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+
 
 /* Service Stats */
 .service-stats-container {
@@ -737,14 +735,6 @@ input:checked + .slider:before { transform: translateX(18px); }
 }
 .panel-header h3 { font-size: 1.25rem; font-weight: 600; }
 .panel-controls { display: flex; gap: 1rem; align-items: center; }
-.link-btn {
-  background: none; border: none;
-  color: var(--primary-color); cursor: pointer;
-  font-size: 0.85rem; font-weight: 500;
-  display: flex; align-items: center; gap: 0.4rem;
-}
-.link-btn:hover { text-decoration: underline; color: var(--primary-color-hover); }
-.link-btn svg { width: 14px; height: 14px; }
 
 #gamemode-search-input {
   background-color: var(--background-color);
@@ -1138,7 +1128,7 @@ input:checked + .slider:before { transform: translateX(18px); }
     display: none;
   }
   .nav-btn {
-    padding: 6px;
+    padding: 0 12px;
   }
 
   .service-controls {
