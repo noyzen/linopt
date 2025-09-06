@@ -5,10 +5,11 @@ import { initGameModeView, renderGameModeUI, populateGameModeServices, loadGameM
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- Window Controls ---
-    const { minBtn, maxBtn, closeBtn, maxIcon, restoreIcon } = dom.window;
+    const { minBtn, maxBtn, closeBtn, githubBtn, maxIcon, restoreIcon } = dom.window;
     minBtn.addEventListener('click', () => window.electronAPI.minimizeWindow());
     maxBtn.addEventListener('click', () => window.electronAPI.maximizeWindow());
     closeBtn.addEventListener('click', () => window.electronAPI.closeWindow());
+    githubBtn.addEventListener('click', () => window.electronAPI.openExternalLink('https://github.com/noyzen/linopt'));
 
     const setMaximizedUI = () => {
         document.body.classList.add('maximized');

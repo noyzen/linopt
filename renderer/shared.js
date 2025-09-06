@@ -19,6 +19,7 @@ export const dom = {
     minBtn: document.getElementById('min-btn'),
     maxBtn: document.getElementById('max-btn'),
     closeBtn: document.getElementById('close-btn'),
+    githubBtn: document.getElementById('github-btn'),
     maxIcon: document.getElementById('max-icon'),
     restoreIcon: document.getElementById('restore-icon'),
   },
@@ -78,6 +79,7 @@ export const dom = {
     stoppedServiceCount: document.getElementById('stopped-service-count'),
     gameModeSearchInput: document.getElementById('gamemode-search-input'),
     gameModeResetBtn: document.getElementById('gamemode-reset-btn'),
+    gameModeClearBtn: document.getElementById('gamemode-clear-btn'),
     gameModeExitBtn: document.getElementById('gamemode-exit-btn'),
   },
   // Modal

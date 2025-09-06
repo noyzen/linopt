@@ -1,4 +1,4 @@
-import { state, dom, showModal, toggleEmptyState, updateStatus } from './shared.js';
+import { state, dom, showModal, hideModal, updateStatus, toggleEmptyState } from './shared.js';
 import { refreshAndRenderServices } from './servicesView.js';
 import { logChange } from './changesView.js';
 
@@ -308,6 +308,25 @@ export function initGameModeView(debounce) {
                 } finally {
                     gameModeDom.gameModeLoader.classList.add('hidden');
                 }
+            }
+        });
+    });
+
+    gameModeDom.gameModeClearBtn.addEventListener('click', () => {
+        showModal({
+            title: 'Clear Game Mode List',
+            message: 'Are you sure you want to remove all services from the Game Mode stop list? This action cannot be undone.',
+            danger: true,
+            confirmText: 'Clear List',
+            onConfirm: () => {
+                hideModal();
+                state.gameModeState.servicesToStop = [];
+                saveGameModeState();
+                logChange('Game Mode', 'Cleared stop list', 'Success');
+                populateGameModeServices();
+                renderGameModeUI();
+                refreshAndRenderServices();
+                updateStatus('Game Mode list cleared.', false);
             }
         });
     });
