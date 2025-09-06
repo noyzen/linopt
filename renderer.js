@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusText = document.getElementById('status-text');
   const searchInput = document.getElementById('search-input');
   const serviceStatsContainer = document.getElementById('service-stats');
+  const userServicesToggle = document.getElementById('user-services-toggle');
   
   // Navigation
   const navButtons = document.querySelectorAll('.nav-btn');
@@ -114,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const serviceRow = serviceRowTemplate.content.cloneNode(true);
       const rowElement = serviceRow.querySelector('.service-row');
       const serviceName = serviceRow.querySelector('.service-name');
+      const userBadge = serviceRow.querySelector('.user-badge');
       const statusDot = serviceRow.querySelector('.status-dot');
       const enableToggle = serviceRow.querySelector('.enable-toggle');
       const startBtn = serviceRow.querySelector('.btn-start');
@@ -121,9 +123,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const restartBtn = serviceRow.querySelector('.btn-restart');
       
       const unitName = service.unit;
+      const isUserService = service.isUser;
+      
       serviceName.textContent = unitName;
       serviceName.title = unitName;
       rowElement.dataset.serviceName = unitName;
+
+      // Show user badge if it's a user service
+      userBadge.classList.toggle('hidden', !isUserService);
 
       // Set status dot color and title
       statusDot.classList.remove('active', 'failed', 'inactive');
@@ -146,9 +153,9 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStatus(`${action}ing ${unitName}...`);
         try {
           if (isEnabled) {
-            await window.electronAPI.systemd.enableService(unitName);
+            await window.electronAPI.systemd.enableService(unitName, isUserService);
           } else {
-            await window.electronAPI.systemd.disableService(unitName);
+            await window.electronAPI.systemd.disableService(unitName, isUserService);
           }
           // Update local cache
           const cachedService = allServicesCache.find(s => s.unit === unitName);
@@ -167,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const createControlHandler = (actionFn, verb) => async () => {
         updateStatus(`${verb}ing ${unitName}...`);
         try {
-          await actionFn(unitName);
+          await actionFn(unitName, isUserService);
           updateStatus(`Successfully sent ${verb} signal to ${unitName}. Refresh to see updated status.`);
           logChange(verb, unitName, 'Success');
         } catch (err) {
@@ -187,10 +194,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadServices = async () => {
     loader.classList.remove('hidden');
     serviceList.classList.add('hidden');
+    const includeUser = userServicesToggle.checked;
     updateStatus('Loading services...');
     
     try {
-      const services = await window.electronAPI.systemd.getServices();
+      const services = await window.electronAPI.systemd.getServices(includeUser);
       allServicesCache = services; // Cache the full list
       populateServiceList(services);
       searchInput.value = ''; // Clear search on refresh
@@ -386,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Event Listeners ---
   refreshBtn.addEventListener('click', loadServices);
+  userServicesToggle.addEventListener('change', loadServices);
   searchInput.addEventListener('input', handleSearch);
   clearChangesBtn.addEventListener('click', clearChanges);
 

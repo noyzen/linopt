@@ -150,6 +150,12 @@ main.container {
 h1 { font-size: 1.75rem; font-weight: 600; }
 
 /* Search and Action Buttons */
+.header-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
 .search-container { position: relative; }
 .search-container svg {
   position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
@@ -246,9 +252,19 @@ button { font-family: var(--font-family); }
   font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
   font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.user-badge {
+  background-color: var(--primary-color);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  text-transform: uppercase;
+}
 .service-controls { display: flex; align-items: center; gap: 1.5rem; }
 .toggle-container { display: flex; align-items: center; gap: 0.75rem; }
-.toggle-label { font-size: 0.8rem; color: var(--text-color-muted); }
+.toggle-label { font-size: 0.8rem; color: var(--text-color-muted); user-select: none; }
 .action-buttons { display: flex; gap: 0.5rem; }
 .action-buttons button {
   display: flex; align-items: center; gap: 0.4rem;

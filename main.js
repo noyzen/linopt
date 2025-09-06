@@ -8,7 +8,8 @@ const store = new Store();
 
 // --- Service Watcher State ---
 let serviceWatcherInterval;
-let previousServicesState = new Map();
+let previousSystemServicesState = new Map();
+let previousUserServicesState = new Map();
 
 // Helper to execute shell commands
 function runCommand(command) {
@@ -27,10 +28,18 @@ function runCommand(command) {
 // --- Service Watcher Logic ---
 async function initializeWatcherState() {
   try {
-    const unitsStdout = await runCommand('systemctl list-units --type=service --all --no-pager --plain --output=json');
-    const currentServices = JSON.parse(unitsStdout);
-    previousServicesState = new Map(currentServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
-    console.log('Service watcher initialized with current state.');
+    const [systemUnitsStdout, userUnitsStdout] = await Promise.all([
+      runCommand('systemctl list-units --type=service --all --no-pager --plain --output=json').catch(() => '[]'),
+      runCommand('systemctl --user list-units --type=service --all --no-pager --plain --output=json').catch(() => '[]')
+    ]);
+
+    const systemServices = JSON.parse(systemUnitsStdout);
+    const userServices = JSON.parse(userUnitsStdout);
+
+    previousSystemServicesState = new Map(systemServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
+    previousUserServicesState = new Map(userServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
+    
+    console.log('Service watcher initialized for both system and user states.');
   } catch (error) {
     console.error('Failed to initialize service watcher state:', error.message);
   }
@@ -47,30 +56,39 @@ function startServiceWatcher(win) {
       }
       
       try {
-        const unitsStdout = await runCommand('systemctl list-units --type=service --all --no-pager --plain --output=json');
-        const currentServices = JSON.parse(unitsStdout);
-        const currentServicesMap = new Map(currentServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
+        const [systemUnitsStdout, userUnitsStdout] = await Promise.all([
+            runCommand('systemctl list-units --type=service --all --no-pager --plain --output=json').catch(() => '[]'),
+            runCommand('systemctl --user list-units --type=service --all --no-pager --plain --output=json').catch(() => '[]')
+        ]);
 
-        // Compare current state with previous state
-        for (const [unit, currentState] of currentServicesMap.entries()) {
-          const prevState = previousServicesState.get(unit);
-          
-          if (prevState && (prevState.active !== currentState.active || prevState.sub !== currentState.sub)) {
-            // A change has been detected
-            win.webContents.send('systemd:service-changed', {
-              unit,
-              oldState: prevState,
-              newState: currentState,
-            });
+        const currentSystemServices = JSON.parse(systemUnitsStdout);
+        const currentUserServices = JSON.parse(userUnitsStdout);
+        
+        const currentSystemMap = new Map(currentSystemServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
+        const currentUserMap = new Map(currentUserServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
+        
+        const checkForChanges = (currentMap, previousMap, isUser) => {
+          for (const [unit, currentState] of currentMap.entries()) {
+            const prevState = previousMap.get(unit);
+            if (prevState && (prevState.active !== currentState.active || prevState.sub !== currentState.sub)) {
+              win.webContents.send('systemd:service-changed', {
+                unit,
+                oldState: prevState,
+                newState: currentState,
+                isUser,
+              });
+            }
           }
-        }
+        };
+        
+        checkForChanges(currentSystemMap, previousSystemServicesState, false);
+        checkForChanges(currentUserMap, previousUserServicesState, true);
 
-        // Update the previous state for the next check
-        previousServicesState = currentServicesMap;
+        previousSystemServicesState = currentSystemMap;
+        previousUserServicesState = currentUserMap;
 
       } catch (error) {
         // Don't spam logs for transient errors
-        // console.error('Error in service watcher:', error.message);
       }
     }, 3000); // Check every 3 seconds
   });
@@ -134,37 +152,40 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('systemd:get-services', async () => {
-    const listUnitsCommand = 'systemctl list-units --type=service --all --no-pager --plain --output=json';
-    const listUnitFilesCommand = 'systemctl list-unit-files --type=service --no-pager --plain --output=json';
+  ipcMain.handle('systemd:get-services', async (_, includeUserServices) => {
+    const systemListUnitsCmd = 'systemctl list-units --type=service --all --no-pager --plain --output=json';
+    const systemListUnitFilesCmd = 'systemctl list-unit-files --type=service --no-pager --plain --output=json';
+    
+    const userListUnitsCmd = 'systemctl --user list-units --type=service --all --no-pager --plain --output=json';
+    const userListUnitFilesCmd = 'systemctl --user list-unit-files --type=service --no-pager --plain --output=json';
 
     try {
-      // Run both commands in parallel for efficiency
-      const [unitsStdout, unitFilesStdout] = await Promise.all([
-        runCommand(listUnitsCommand),
-        runCommand(listUnitFilesCommand)
-      ]);
+      const systemCommands = [runCommand(systemListUnitsCmd), runCommand(systemListUnitFilesCmd)];
+      // If user services are requested, prepare the commands. Otherwise, resolve with empty arrays.
+      const userCommands = includeUserServices 
+        ? [runCommand(userListUnitsCmd).catch(() => '[]'), runCommand(userListUnitFilesCmd).catch(() => '[]')] 
+        : [Promise.resolve('[]'), Promise.resolve('[]')];
 
-      const services = JSON.parse(unitsStdout);
-      const unitFiles = JSON.parse(unitFilesStdout);
+      const [systemUnitsStdout, systemUnitFilesStdout, userUnitsStdout, userUnitFilesStdout] = await Promise.all([...systemCommands, ...userCommands]);
+
+      const systemServices = JSON.parse(systemUnitsStdout);
+      const systemUnitFiles = JSON.parse(systemUnitFilesStdout);
+      const userServices = JSON.parse(userUnitsStdout);
+      const userUnitFiles = JSON.parse(userUnitFilesStdout);
       
-      // Create a map for quick lookup of the boot-time enabled/disabled state
-      const unitFileStateMap = new Map();
-      unitFiles.forEach(file => {
-        unitFileStateMap.set(file.unit_file, file.state);
-      });
-
-      // Merge the authoritative boot-time state into the main service list
-      const mergedServices = services.map(service => {
-        // The state from list-unit-files is the ground truth for "enable on boot"
-        const unitFileState = unitFileStateMap.get(service.unit) || service.unit_file_state || 'static';
-        return {
+      const mergeStates = (services, unitFiles, isUser) => {
+        const unitFileStateMap = new Map(unitFiles.map(file => [file.unit_file, file.state]));
+        return services.map(service => ({
           ...service,
-          unit_file_state: unitFileState,
-        };
-      });
+          unit_file_state: unitFileStateMap.get(service.unit) || service.unit_file_state || 'static',
+          isUser,
+        }));
+      };
 
-      return mergedServices;
+      const mergedSystemServices = mergeStates(systemServices, systemUnitFiles, false);
+      const mergedUserServices = includeUserServices ? mergeStates(userServices, userUnitFiles, true) : [];
+
+      return [...mergedSystemServices, ...mergedUserServices];
     } catch (error) {
       console.error('Failed to get services:', error.message);
       throw new Error(`Failed to list services: ${error.message}`);
@@ -178,26 +199,21 @@ app.whenReady().then(() => {
     }
     return name;
   };
+  
+  // Generic handler for service control commands
+  const createServiceHandler = (commandTemplate) => {
+    return async (_, { service, isUser }) => {
+      const userFlag = isUser ? '--user ' : '';
+      const command = commandTemplate.replace('%s', sanitize(service));
+      return runCommand(`systemctl ${userFlag}${command}`);
+    };
+  };
 
-  ipcMain.handle('systemd:enable-service', async (_, service) => {
-    return runCommand(`systemctl enable ${sanitize(service)}`);
-  });
-
-  ipcMain.handle('systemd:disable-service', async (_, service) => {
-    return runCommand(`systemctl disable ${sanitize(service)}`);
-  });
-
-  ipcMain.handle('systemd:start-service', async (_, service) => {
-    return runCommand(`systemctl start ${sanitize(service)}`);
-  });
-
-  ipcMain.handle('systemd:stop-service', async (_, service) => {
-    return runCommand(`systemctl stop ${sanitize(service)}`);
-  });
-
-  ipcMain.handle('systemd:restart-service', async (_, service) => {
-    return runCommand(`systemctl restart ${sanitize(service)}`);
-  });
+  ipcMain.handle('systemd:enable-service', createServiceHandler('enable %s'));
+  ipcMain.handle('systemd:disable-service', createServiceHandler('disable %s'));
+  ipcMain.handle('systemd:start-service', createServiceHandler('start %s'));
+  ipcMain.handle('systemd:stop-service', createServiceHandler('stop %s'));
+  ipcMain.handle('systemd:restart-service', createServiceHandler('restart %s'));
 
   createWindow();
 

@@ -12,12 +12,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // SystemD functions
   systemd: {
     check: () => ipcRenderer.invoke('systemd:check'),
-    getServices: () => ipcRenderer.invoke('systemd:get-services'),
-    enableService: (service) => ipcRenderer.invoke('systemd:enable-service', service),
-    disableService: (service) => ipcRenderer.invoke('systemd:disable-service', service),
-    startService: (service) => ipcRenderer.invoke('systemd:start-service', service),
-    stopService: (service) => ipcRenderer.invoke('systemd:stop-service', service),
-    restartService: (service) => ipcRenderer.invoke('systemd:restart-service', service),
+    getServices: (includeUser) => ipcRenderer.invoke('systemd:get-services', includeUser),
+    enableService: (service, isUser) => ipcRenderer.invoke('systemd:enable-service', { service, isUser }),
+    disableService: (service, isUser) => ipcRenderer.invoke('systemd:disable-service', { service, isUser }),
+    startService: (service, isUser) => ipcRenderer.invoke('systemd:start-service', { service, isUser }),
+    stopService: (service, isUser) => ipcRenderer.invoke('systemd:stop-service', { service, isUser }),
+    restartService: (service, isUser) => ipcRenderer.invoke('systemd:restart-service', { service, isUser }),
     onServiceChanged: (callback) => ipcRenderer.on('systemd:service-changed', (_event, ...args) => callback(...args)),
   },
 });
