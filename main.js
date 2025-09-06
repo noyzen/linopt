@@ -341,14 +341,36 @@ app.whenReady().then(() => {
   // --- Game Mode Service Categorization ---
   const SERVICE_CATEGORIES = {
     UNSAFE_TO_STOP: [
+      // --- Core System & Login ---
       'systemd', 'dbus', 'polkit', 'logind', 'user@',
-      'gdm', 'sddm', 'lightdm', 'lxdm',
-      'gnome-session', 'plasma-workspace', 'xfce4-session', 'wayland', 'x11', 'Xorg', 'mutter', 'kwin',
+      'udev', 'modules-load', 'pam',
+      'gdm', 'sddm', 'lightdm', 'lxdm', 'getty@',
+
+      // --- Desktop Environments & Window Managers ---
+      // GNOME
+      'gnome-session', 'gnome-shell', 'gsd-', 'gnome-keyring',
+      // KDE Plasma
+      'plasma-workspace', 'plasmashell', 'kwin', 'kded', 'ksmserver', 'kdewallet',
+      // XFCE
+      'xfce4-session', 'xfdesktop', 'xfwm4',
+      // Cinnamon
+      'cinnamon-session', 'muffin',
+      // MATE
+      'mate-session', 'marco',
+      // Generic DE/WM components
+      'wayland', 'x11', 'Xorg', 'mutter',
+
+      // --- Desktop Integration & Accessibility ---
+      'xdg-desktop-portal', 'xdg-permission-store', 'at-spi', 'ibus', 'fcitx',
+
+      // --- Networking ---
       'NetworkManager', 'networkd', 'wpa_supplicant', 'resolved', 'dnsmasq',
+
+      // --- Audio ---
       'pipewire', 'pulseaudio', 'wireplumber', 'alsa', 'jack',
+
+      // --- Graphics Drivers ---
       'nvidia-persistenced', 'nvidia-powerd',
-      'udev', 'modules-load',
-      'gnome-keyring', 'kdewallet', 'pam'
     ],
     DISRUPTIVE_TO_STOP: [
       'tracker-miner', 'tracker-store', 'baloo', 'locate', 'plocate', 'mlocate',
