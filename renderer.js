@@ -6,6 +6,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let confirmCallback = null;
   const LOG_LIMIT = 500; // Cap logs to prevent performance issues
 
+  // --- UTILITIES ---
+  const debounce = (func, delay) => {
+    let timeout;
+    return (...args) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), delay);
+    };
+  };
+
   // --- DOM Elements ---
   const serviceList = document.getElementById('service-list');
   const serviceRowTemplate = document.getElementById('service-row-template');
@@ -154,7 +163,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const sortedServices = services.sort((a, b) => a.unit.localeCompare(b.unit));
 
     if (sortedServices.length === 0) {
-      toggleEmptyState('service-list', true);
+      const message = searchInput.value
+        ? "Your search returned no results."
+        : "No services could be loaded, or they are all filtered out.";
+      toggleEmptyState('service-list', true, message);
       return;
     }
 
@@ -736,8 +748,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  searchInput.addEventListener('input', refreshAndRenderServices);
-  searchChangesInput.addEventListener('input', renderChanges);
+  searchInput.addEventListener('input', debounce(refreshAndRenderServices, 300));
+  searchChangesInput.addEventListener('input', debounce(renderChanges, 300));
   userServicesToggle.addEventListener('change', refreshAndRenderServices);
 
   serviceFilters.addEventListener('click', (e) => {
@@ -813,9 +825,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const serviceName = serviceRow.dataset.serviceName;
     const isUser = serviceRow.dataset.isUser === 'true';
+    const enableToggle = serviceRow.querySelector('.enable-toggle');
 
-    if (target.closest('.enable-toggle')) {
-      const isEnabled = target.checked;
+    if (target.closest('.toggle-container') && enableToggle) {
+       // The click might be on the label, not the input itself. The input's checked state updates automatically.
+      const isEnabled = enableToggle.checked;
       const action = isEnabled ? 'enable' : 'disable';
       showModal({
         title: `Confirm ${action}`,
@@ -995,9 +1009,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  gameModeSearchInput.addEventListener('input', () => {
+  gameModeSearchInput.addEventListener('input', debounce(() => {
     populateGameModeServices(getFilteredGameModeServices());
-  });
+  }, 300));
 
   gameModeResetBtn.addEventListener('click', () => {
     showModal({

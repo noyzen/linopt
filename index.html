@@ -65,22 +65,22 @@
               <button class="filter-btn" data-filter="disabled" aria-pressed="false">Disabled</button>
             </div>
           </div>
-          <div class="toggle-container header-toggle">
-            <label class="toggle-switch">
+          <label class="toggle-container header-toggle">
+            <div class="toggle-switch">
               <input type="checkbox" id="user-services-toggle" checked>
               <span class="slider"></span>
-            </label>
+            </div>
             <span class="toggle-label">Show User Services</span>
-          </div>
+          </label>
         </div>
         <div class="header-controls-right">
-          <div class="toggle-container header-toggle">
-            <label class="toggle-switch">
+          <label class="toggle-container header-toggle">
+            <div class="toggle-switch">
               <input type="checkbox" id="live-update-services-toggle">
               <span class="slider"></span>
-            </label>
+            </div>
             <span class="toggle-label">Live Update</span>
-          </div>
+          </label>
           <button id="refresh-btn" class="hidden" aria-label="Refresh Services">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
             <span>Refresh</span>
@@ -146,13 +146,13 @@
           </div>
         </div>
         <div class="header-controls-right">
-          <div class="toggle-container header-toggle">
-            <label class="toggle-switch">
+          <label class="toggle-container header-toggle">
+            <div class="toggle-switch">
               <input type="checkbox" id="live-update-changes-toggle">
               <span class="slider"></span>
-            </label>
+            </div>
             <span class="toggle-label">Live Update</span>
-          </div>
+          </label>
            <button id="refresh-changes-btn" class="hidden" aria-label="Refresh Change Log">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
             <span>Refresh</span>
@@ -277,13 +277,13 @@
         <span class="user-badge hidden">USER</span>
       </div>
       <div class="service-controls">
-        <div class="toggle-container">
-          <label class="toggle-switch">
+        <label class="toggle-container">
+          <div class="toggle-switch">
             <input type="checkbox" class="enable-toggle" aria-label="Enable on Boot">
             <span class="slider"></span>
-          </label>
+          </div>
           <span class="toggle-label">Enable on Boot</span>
-        </div>
+        </label>
         <div class="action-buttons">
           <button class="btn-add-gamemode" title="Add to Game Mode stop list">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8.25c0-1.24-1.01-2.25-2.25-2.25H5.25C4.01 6 3 7.01 3 8.25v7.5C3 16.99 4.01 18 5.25 18h13.5c1.24 0 2.25-1.01 2.25-2.25v-7.5z"></path><path d="M8 14v-4"></path><path d="M6 12h4"></path><path d="M15.5 14a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"></path><path d="M18.5 11a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"></path></svg>
@@ -353,12 +353,12 @@
   <template id="restore-service-row-template">
     <div class="restore-service-row">
       <span class="service-name"></span>
-      <div class="toggle-container">
-        <label class="toggle-switch">
+      <label class="toggle-container">
+        <div class="toggle-switch">
           <input type="checkbox" class="restore-toggle" checked aria-label="Restore this service">
           <span class="slider"></span>
-        </label>
-      </div>
+        </div>
+      </label>
     </div>
   </template>
 

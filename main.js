@@ -4,7 +4,6 @@ const path = require('path');
 const { exec } = require('child_process');
 const fs = require('fs').promises;
 const sudo = require('sudo-prompt');
-const dns = require('dns');
 
 const store = new Store();
 
