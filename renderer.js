@@ -504,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
     gameModeStatusCard.dataset.status = isOn ? 'active' : 'inactive';
     gameModeStatusIcon.innerHTML = isOn
       ? `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`
-      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8.5h.01M19.5 11.5h.01M2 13h2c.6 0 1 .4 1 1v2c0 .6-.4 1-1 1H2v-4Z"/><path d="M5 15v-2c0-.6.4-1 1-1h2"/><path d="m14 12-2-2-2 2 2 2 2-2Z"/><path d="M22 13v-2c0-.6-.4-1-1-1h-2c-.6 0-1 .4-1 1v2c0 .6.4 1 1 1h2c.6 0 1-.4 1-1Z"/><path d="M6 6.2c1.5 1.8 3.5 3 6 3s4.5-1.2 6-3"/><path d="M6 17.8c1.5-1.8 3.5-3 6-3s4.5 1.2 6 3"/></svg>`;
+      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="11" x2="10" y2="11"></line><line x1="8" y1="9" x2="8" y2="13"></line><line x1="15" y1="12" x2="15.01" y2="12"></line><line x1="18" y1="10" x2="18.01" y2="10"></line><path d="M17.32 5H6.68a4 4 0 0 0-3.97 3.59L2 15.25a4 4 0 0 0 3.5 4.25H18.5a4 4 0 0 0 4-4V8.59a4 4 0 0 0-3.97-3.59z"></path></svg>`;
     gameModeStatusTitle.textContent = isOn ? 'Game Mode is Active' : 'Game Mode';
     gameModeStatusDescription.textContent = isOn ? 'System optimized for performance.' : 'Optimize system performance.';
     
