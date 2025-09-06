@@ -50,7 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const gameModeServiceList = document.getElementById('gamemode-service-list');
   const gameModeServiceRowTemplate = document.getElementById('gamemode-service-row-template');
   const gameModeLoader = document.getElementById('gamemode-loader');
-  const gameModeAddServiceBtn = document.getElementById('gamemode-add-service-btn');
   const gameModeStoppedListContainer = document.getElementById('gamemode-stopped-list-container');
   const gameModeStoppedList = document.getElementById('gamemode-stopped-list');
   const stoppedServiceCount = document.getElementById('stopped-service-count');
@@ -67,7 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalTitle = document.getElementById('modal-title');
   const modalMessage = document.getElementById('modal-message');
   const modalListContainer = document.getElementById('modal-list-container');
-  const addServiceRowTemplate = document.getElementById('add-service-row-template');
   const modalConfirmBtn = document.getElementById('modal-confirm-btn');
   const modalCancelBtn = document.getElementById('modal-cancel-btn');
   const modalContent = confirmationDialog.querySelector('.modal-content');
@@ -163,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const serviceName = serviceRow.querySelector('.service-name');
       const userBadge = serviceRow.querySelector('.user-badge');
       const enableToggle = serviceRow.querySelector('.enable-toggle');
+      const addGameModeBtn = serviceRow.querySelector('.btn-add-gamemode');
       const startBtn = serviceRow.querySelector('.btn-start');
       const stopBtn = serviceRow.querySelector('.btn-stop');
       const restartBtn = serviceRow.querySelector('.btn-restart');
@@ -185,6 +184,13 @@ document.addEventListener('DOMContentLoaded', () => {
       enableToggle.disabled = isStatic;
       enableToggle.closest('.toggle-container').title = isStatic ? 'This service cannot be enabled or disabled on boot.' : `Set to ${isEnabledOnBoot ? 'run' : 'not run'} on boot`;
       
+      const isAddedToGameMode = gameModeState.servicesToStop.some(s => s.name === service.unit);
+      addGameModeBtn.disabled = isAddedToGameMode;
+      if (isAddedToGameMode) {
+        addGameModeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+        addGameModeBtn.title = 'Already in Game Mode list';
+      }
+
       startBtn.disabled = isActive;
       stopBtn.disabled = !isActive;
       restartBtn.disabled = !isActive;
@@ -491,8 +497,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update Control Panel
     gameModeStatusCard.dataset.status = isOn ? 'active' : 'inactive';
     gameModeStatusIcon.innerHTML = isOn
-      ? `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`
-      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.78 17.09c.28.14.59.22.92.22a2 2 0 0 0 1.64-.89l.38-.6a2 2 0 0 1 3.4 0l.38.6a2 2 0 0 0 1.64.89c.33 0 .64-.08.92-.22l2.4-1.2a2 2 0 0 0 1.16-1.7V12a2 2 0 0 0-1-1.75l-4-2.5a2 2 0 0 0-2 0l-4 2.5a2 2 0 0 0-1 1.75v2.19a2 2 0 0 0 1.16 1.7z"></path><path d="M12 12V5a3 3 0 0 1 3-3h3a2 2 0 0 1 2 2v2"></path></svg>`;
+      ? `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`
+      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="12" x2="10" y2="12"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="15" y1="13" x2="15.01" y2="13"></line><line x1="18" y1="11" x2="18.01" y2="11"></line><path d="M19 17a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-3.28a2 2 0 0 0-1.72.72l-1.42 2.14a2 2 0 0 1-1.72.72H8a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2Z"></path></svg>`;
     gameModeStatusTitle.textContent = isOn ? 'Game Mode is Active' : 'Game Mode';
     gameModeStatusDescription.textContent = isOn ? 'System optimized for performance.' : 'Optimize system performance.';
     
@@ -512,6 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sessionStoppedCount.textContent = stoppedServices.length;
       stoppedServiceCount.textContent = stoppedServices.length;
       gameModeStoppedList.innerHTML = stoppedServices.map(s => `<li>${s}</li>`).join('');
+      document.querySelector('#gamemode-session-info .session-icon-large').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`;
     }
   
     gameModeMainLoader.classList.add('hidden');
@@ -611,92 +618,6 @@ document.addEventListener('DOMContentLoaded', () => {
       logChange('Game Mode', 'Deactivation failed', 'Failed', error);
       gameModeActionBtn.disabled = false;
       gameModeMainLoader.classList.add('hidden');
-    }
-  };
-
-  const openAddServiceModal = async () => {
-    updateStatus('Loading all services with recommendations...');
-    try {
-      const allServices = await window.electronAPI.systemd.getServiceRecommendations();
-      const currentStopList = new Set((gameModeState.servicesToStop || []).map(s => s.name));
-
-      let listHtml = `
-        <div class="search-container modal-search-container">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="search" id="modal-search-input" placeholder="Filter services..." autocomplete="off">
-        </div>
-      `;
-
-      const fragment = document.createDocumentFragment();
-      allServices.forEach(service => {
-        const template = addServiceRowTemplate.content.cloneNode(true);
-        const row = template.querySelector('.add-service-row');
-        const checkbox = template.querySelector('.add-service-checkbox');
-        const badge = template.querySelector('.recommendation-badge');
-        
-        template.querySelector('.service-name').textContent = service.name;
-        template.querySelector('.user-badge').classList.toggle('hidden', !service.isUser);
-        template.querySelector('.service-hint').textContent = service.hint;
-        
-        badge.textContent = service.recommendation;
-        badge.dataset.level = service.recommendation;
-        
-        checkbox.value = service.name;
-        checkbox.dataset.hint = service.hint;
-        checkbox.disabled = currentStopList.has(service.name); // Disable if already in the list
-        
-        if(service.recommendation === 'unsafe') {
-          checkbox.disabled = true;
-          row.style.opacity = '0.6';
-          row.style.cursor = 'not-allowed';
-          row.querySelector('label').style.cursor = 'not-allowed';
-        }
-
-        fragment.appendChild(template);
-      });
-      
-      showModal({
-        title: 'Add Services to Game Mode',
-        message: 'Select services to add to the "stop list". Unsafe services cannot be added.',
-        confirmText: 'Add Selected',
-        large: true,
-        listContent: '',
-        onConfirm: () => {
-          const selectedServices = [];
-          modalListContainer.querySelectorAll('.add-service-checkbox:checked').forEach(cb => {
-            selectedServices.push({ name: cb.value, hint: cb.dataset.hint });
-          });
-
-          if (selectedServices.length > 0) {
-            const currentMap = new Map((gameModeState.servicesToStop || []).map(s => [s.name, s]));
-            selectedServices.forEach(s => currentMap.set(s.name, s));
-            gameModeState.servicesToStop = Array.from(currentMap.values()).sort((a,b) => a.name.localeCompare(b.name));
-            saveGameModeState();
-            populateGameModeServices();
-            logChange('Game Mode', `Added ${selectedServices.length} services to list`, 'Success');
-          }
-          hideModal();
-        },
-      });
-
-      modalListContainer.innerHTML = listHtml; // Add search bar to DOM
-      modalListContainer.appendChild(fragment);
-
-      // Add live search functionality to the modal
-      const modalSearchInput = document.getElementById('modal-search-input');
-      modalSearchInput.addEventListener('input', () => {
-        const searchTerm = modalSearchInput.value.toLowerCase();
-        const rows = modalListContainer.querySelectorAll('.add-service-row');
-        rows.forEach(row => {
-          const serviceName = row.querySelector('.service-name').textContent.toLowerCase();
-          row.style.display = serviceName.includes(searchTerm) ? '' : 'none';
-        });
-      });
-
-
-    } catch (error) {
-      updateStatus('Failed to load services for modal.', true);
-      console.error(error);
     }
   };
 
@@ -807,6 +728,19 @@ document.addEventListener('DOMContentLoaded', () => {
           hideModal();
         }
       });
+    } else if (target.closest('.btn-add-gamemode')) {
+      const serviceToAdd = { name: serviceName, hint: 'Added from service list' };
+      gameModeState.servicesToStop.push(serviceToAdd);
+      gameModeState.servicesToStop.sort((a,b) => a.name.localeCompare(b.name));
+      saveGameModeState();
+      logChange('Add', `${serviceName} to Game Mode`, 'Success');
+      updateStatus(`Added ${serviceName} to Game Mode stop list.`, false);
+      
+      const button = target.closest('.btn-add-gamemode');
+      button.disabled = true;
+      button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+      button.title = 'Already in Game Mode list';
+
     } else if (target.closest('.btn-start')) {
       handleServiceAction('start', serviceName, isUser);
     } else if (target.closest('.btn-stop')) {
@@ -908,19 +842,20 @@ document.addEventListener('DOMContentLoaded', () => {
       saveGameModeState();
       populateGameModeServices();
       logChange('Remove', `${serviceName} from Game Mode`, 'Success');
+      // After removing from game mode, we need to refresh the main service list
+      // if it's visible, so the 'add' button becomes active again.
+      refreshAndRenderServices();
     }
   });
-
-  gameModeAddServiceBtn.addEventListener('click', openAddServiceModal);
 
   // --- Initial Load ---
   const initialize = async () => {
     const hasSystemd = await checkSystemd();
     if (hasSystemd) {
       await Promise.all([
+        loadGameModeState(), // Load this first so service render knows what's added
         fetchServices(),
         loadLogs(),
-        loadGameModeState(),
       ]);
       toggleWatcher(); // Start watcher based on initial toggle state
     }

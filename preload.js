@@ -15,7 +15,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     check: () => ipcRenderer.invoke('systemd:check'),
     getServices: (includeUser) => ipcRenderer.invoke('systemd:get-services', includeUser),
     getOptimizableServices: () => ipcRenderer.invoke('systemd:get-optimizable-services'),
-    getServiceRecommendations: () => ipcRenderer.invoke('systemd:get-service-recommendations'),
     enableService: (service, isUser) => ipcRenderer.invoke('systemd:enable-service', { service, isUser }),
     disableService: (service, isUser) => ipcRenderer.invoke('systemd:disable-service', { service, isUser }),
     startService: (service, isUser) => ipcRenderer.invoke('systemd:start-service', { service, isUser }),

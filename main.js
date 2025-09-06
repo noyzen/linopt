@@ -365,28 +365,6 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('systemd:get-service-recommendations', async () => {
-    const services = await internalFetchServices(true);
-    return services.map(service => {
-      const { unit, isUser } = service;
-      let recommendation = 'neutral';
-      let hint = 'General system service';
-
-      if (SERVICE_CATEGORIES.UNSAFE_TO_STOP.some(p => unit.includes(p))) {
-        recommendation = 'unsafe';
-        hint = 'Stopping this can break your system';
-      } else if (SERVICE_CATEGORIES.DISRUPTIVE_TO_STOP.some(p => unit.includes(p))) {
-        recommendation = 'disruptive';
-        hint = 'May reduce system functionality';
-      } else if (SERVICE_CATEGORIES.RECOMMENDED_TO_STOP.some(p => unit.includes(p))) {
-        recommendation = 'recommended';
-        hint = 'Safe to stop for gaming sessions';
-      }
-      
-      return { name: unit, isUser, recommendation, hint };
-    }).sort((a,b) => a.name.localeCompare(b.name));
-  });
-
   // Reusable function to execute a command with sudo-prompt
   function runSudoCommand(command, action) {
     const sudoOptions = {
