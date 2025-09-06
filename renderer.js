@@ -98,7 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
       serviceName.textContent = unitName;
       serviceName.title = unitName;
       rowElement.dataset.serviceName = unitName;
-      rowElement.style.animationDelay = `${index * 20}ms`;
 
       // Set status dot color and title
       statusDot.classList.remove('active', 'failed', 'inactive');
@@ -220,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const statusEl = changeRow.querySelector('.change-status');
       const timeEl = changeRow.querySelector('.change-time');
 
-      rowElement.style.animationDelay = `${index * 20}ms`;
       infoEl.dataset.action = log.action;
       iconEl.innerHTML = getActionIcon(log.action);
       actionEl.textContent = log.action;
@@ -264,7 +262,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const restoreBtn = snapshotCard.querySelector('.btn-restore');
       const deleteBtn = snapshotCard.querySelector('.btn-delete');
       
-      snapshotCard.style.animationDelay = `${index * 30}ms`;
 
       const date = new Date(snapshot.id);
       nameEl.textContent = snapshot.name;
@@ -297,11 +294,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    const snapshotName = prompt("Enter a name for this snapshot:", `Snapshot ${new Date().toLocaleString()}`);
-    if (!snapshotName) {
-      updateStatus('Snapshot creation cancelled.');
-      return;
-    }
+    // Using a default name instead of the unsupported prompt()
+    const snapshotName = `Snapshot ${new Date().toLocaleString()}`;
 
     const snapshot = {
       id: Date.now(),
@@ -313,6 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     await window.electronAPI.snapshots.save(snapshot);
     updateStatus('Snapshot created successfully.', false);
+    // Switch to snapshot view to provide immediate feedback
     switchView('snapshots-view');
   };
 
