@@ -26,6 +26,52 @@ function runCommand(command) {
   });
 }
 
+// Reusable service fetching logic
+async function internalFetchServices(includeUserServices) {
+    const systemListUnitsCmd = 'systemctl list-units --type=service --all --no-pager --plain --output=json';
+    const systemListUnitFilesCmd = 'systemctl list-unit-files --type=service --no-pager --plain --output=json';
+    
+    const userListUnitsCmd = 'systemctl --user list-units --type=service --all --no-pager --plain --output=json';
+    const userListUnitFilesCmd = 'systemctl --user list-unit-files --type=service --no-pager --plain --output=json';
+
+    try {
+      const systemCommands = [runCommand(systemListUnitsCmd), runCommand(systemListUnitFilesCmd)];
+      if (includeUserServices) {
+        systemCommands.push(runCommand(userListUnitsCmd), runCommand(userListUnitFilesCmd));
+      }
+
+      const results = await Promise.all(systemCommands.map(p => p.catch(() => '[]')));
+      
+      const systemServices = JSON.parse(results[0]);
+      const systemUnitFiles = JSON.parse(results[1]);
+
+      let userServices = [];
+      let userUnitFiles = [];
+      if (includeUserServices) {
+        userServices = JSON.parse(results[2]);
+        userUnitFiles = JSON.parse(results[3]);
+      }
+      
+      const processServices = (services, unitFiles, isUser) => {
+        const unitFileStateMap = new Map(unitFiles.map(file => [file.unit_file, file.state]));
+        return services.map(service => ({
+          ...service,
+          unit_file_state: unitFileStateMap.get(service.unit) || 'static',
+          isUser: isUser
+        }));
+      };
+
+      const combinedSystemServices = processServices(systemServices, systemUnitFiles, false);
+      const combinedUserServices = processServices(userServices, userUnitFiles, true);
+
+      return [...combinedSystemServices, ...combinedUserServices];
+    } catch (error) {
+      console.error('Error fetching services:', error.message);
+      throw new Error(`Failed to get services: ${error.message}`);
+    }
+}
+
+
 // --- Service Watcher Logic ---
 async function getCombinedServicesState(isUser) {
     const userFlag = isUser ? '--user ' : '';
@@ -196,7 +242,15 @@ app.whenReady().then(() => {
 
   // --- Game Mode IPC Handlers ---
   ipcMain.handle('gamemode:get-state', () => {
-    return store.get('gameModeState', { isOn: false, stoppedServices: [], userExclusions: [] });
+    // Note: 'userAddedServices' is now the main list of services to stop. 'userExclusions' is removed.
+    const defaultState = { isOn: false, stoppedServices: [], servicesToStop: [] };
+    const savedState = store.get('gameModeState', defaultState);
+    // Migration: If old state with userExclusions exists, convert it.
+    if (savedState.userExclusions) {
+      delete savedState.userExclusions;
+      store.set('gameModeState', savedState);
+    }
+    return { ...defaultState, ...savedState };
   });
   ipcMain.handle('gamemode:set-state', (_, state) => {
     store.set('gameModeState', state);
@@ -243,117 +297,84 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('systemd:get-services', async (_, includeUserServices) => {
-    const systemListUnitsCmd = 'systemctl list-units --type=service --all --no-pager --plain --output=json';
-    const systemListUnitFilesCmd = 'systemctl list-unit-files --type=service --no-pager --plain --output=json';
-    
-    const userListUnitsCmd = 'systemctl --user list-units --type=service --all --no-pager --plain --output=json';
-    const userListUnitFilesCmd = 'systemctl --user list-unit-files --type=service --no-pager --plain --output=json';
-
-    try {
-      const systemCommands = [runCommand(systemListUnitsCmd), runCommand(systemListUnitFilesCmd)];
-      if (includeUserServices) {
-        systemCommands.push(runCommand(userListUnitsCmd), runCommand(userListUnitFilesCmd));
-      }
-
-      const results = await Promise.all(systemCommands.map(p => p.catch(() => '[]')));
-      
-      const systemServices = JSON.parse(results[0]);
-      const systemUnitFiles = JSON.parse(results[1]);
-
-      let userServices = [];
-      let userUnitFiles = [];
-      if (includeUserServices) {
-        userServices = JSON.parse(results[2]);
-        userUnitFiles = JSON.parse(results[3]);
-      }
-      
-      const processServices = (services, unitFiles, isUser) => {
-        const unitFileStateMap = new Map(unitFiles.map(file => [file.unit_file, file.state]));
-        return services.map(service => ({
-          ...service,
-          unit_file_state: unitFileStateMap.get(service.unit) || 'static',
-          isUser: isUser
-        }));
-      };
-
-      const combinedSystemServices = processServices(systemServices, systemUnitFiles, false);
-      const combinedUserServices = processServices(userServices, userUnitFiles, true);
-
-      return [...combinedSystemServices, ...combinedUserServices];
-    } catch (error) {
-      console.error('Error fetching services:', error.message);
-      throw new Error(`Failed to get services: ${error.message}`);
-    }
+    return internalFetchServices(includeUserServices);
   });
   
-  const SERVICE_HINTS = {
-    'baloo': 'KDE file indexing',
-    'tracker-miner': 'GNOME file indexing',
-    'plocate-updatedb': 'File indexing service',
-    'mlocate': 'File indexing service',
-    'cups': 'Printing service',
-    'cups-browsed': 'Network printer discovery',
-    'saned': 'Scanner service',
-    'bluetooth': 'Bluetooth connectivity',
-    'avahi-daemon': 'Local network discovery (mDNS)',
-    'ssh': 'Remote shell access',
-    'samba': 'Windows file sharing',
-    'nfs-server': 'Network file system server',
-    'power-profiles-daemon': 'Manages power profiles (performance, balanced)',
-    'tlp': 'Advanced power management',
-    'system76-power': 'System76 laptop power management',
-    'geoclue': 'Geolocation service',
-    'modemmanager': 'Manages mobile broadband devices',
-    'upower': 'Power management and battery status',
-    'udisks2': 'Manages disks and automounting',
-    'snapper': 'Filesystem snapshot management',
-    'timeshift': 'System backup and restore',
-    'plymouth': 'Boot splash screen',
-    'protonvpn': 'ProtonVPN service',
-    'openvpn': 'OpenVPN service',
-    'windscribe': 'Windscribe VPN service',
-    'docker': 'Containerization platform',
-    'cron': 'Scheduled task execution',
-    'anacron': 'Scheduled task execution for desktops',
+  // --- Game Mode Service Categorization ---
+  const SERVICE_CATEGORIES = {
+    UNSAFE_TO_STOP: [
+      'systemd', 'dbus', 'polkit', 'logind', 'user@',
+      'gdm', 'sddm', 'lightdm', 'lxdm',
+      'gnome-session', 'plasma-workspace', 'xfce4-session', 'wayland', 'x11', 'Xorg', 'mutter', 'kwin',
+      'NetworkManager', 'networkd', 'wpa_supplicant', 'resolved', 'dnsmasq',
+      'pipewire', 'pulseaudio', 'wireplumber', 'alsa', 'jack',
+      'nvidia-persistenced', 'nvidia-powerd',
+      'udev', 'modules-load',
+      'gnome-keyring', 'kdewallet', 'pam'
+    ],
+    DISRUPTIVE_TO_STOP: [
+      'tracker-miner', 'tracker-store', 'baloo', 'locate', 'plocate', 'mlocate',
+      'udisks2', 'gvfs',
+      'tlp', 'power-profiles-daemon', 'system76-power', 'acpid',
+      'avahi-daemon',
+      'fwupd', 'packagekit', 'unattended-upgrades',
+      'colord', 'upower', 'iio-sensor-proxy'
+    ],
+    RECOMMENDED_TO_STOP: [
+      'bluetooth',
+      'cups', 'cups-browsed', 'saned',
+      'vino-server', 'xrdp', 'vncserver', 'ssh',
+      'samba', 'nfs-server',
+      'geoclue', 'modemmanager',
+      'apport', 'whoopsie',
+      'onedrive', 'dropbox', 'nextcloud-client',
+      'minidlna', 'plexmediaserver', 'kodi',
+      'rtkit-daemon', 'docker', 'cron', 'anacron',
+      'timeshift', 'snapper'
+    ]
   };
 
   ipcMain.handle('systemd:get-optimizable-services', async () => {
     const listRunningCmd = 'systemctl list-units --type=service --state=running --no-pager --plain --output=json';
     try {
       const servicesJson = await runCommand(listRunningCmd);
-      const runningServices = JSON.parse(servicesJson);
+      const runningServices = JSON.parse(servicesJson).map(s => s.unit);
 
-      const CRITICAL_SERVICE_PATTERNS = [
-        // Core systemd and login
-        'systemd', 'dbus', 'polkit', 'logind', 'user@',
-        // Display managers & core desktop
-        'gdm', 'sddm', 'lightdm', 'lxdm', 
-        'gnome-session', 'plasma-workspace', 'xfce4-session', 'wayland', 'x11', 'Xorg',
-        // Networking
-        'NetworkManager', 'networkd', 'wpa_supplicant', 'resolved', 'dnsmasq',
-        // Audio
-        'pipewire', 'pulseaudio', 'wireplumber', 'alsa',
-        // Graphics drivers
-        'nvidia-persistenced', 'nvidia-powerd',
-        // Hardware
-        'udev', 'modules-load',
-      ];
-      
-      const optimizableServices = runningServices
-        .map(s => s.unit)
-        .filter(unit => !CRITICAL_SERVICE_PATTERNS.some(pattern => unit.includes(pattern)))
-        .map(name => {
-          const hintKey = Object.keys(SERVICE_HINTS).find(key => name.includes(key));
-          const hint = hintKey ? SERVICE_HINTS[hintKey] : 'General system service';
-          return { name, hint };
-        })
+      const optimizable = runningServices
+        .filter(unit => SERVICE_CATEGORIES.RECOMMENDED_TO_STOP.some(pattern => unit.includes(pattern)))
+        .map(name => ({
+          name,
+          hint: 'Recommended to stop for gaming',
+        }))
         .sort((a,b) => a.name.localeCompare(b.name));
 
-      return optimizableServices;
+      return optimizable;
     } catch (err) {
       console.error('Could not get optimizable services:', err.message);
       throw err;
     }
+  });
+
+  ipcMain.handle('systemd:get-service-recommendations', async () => {
+    const services = await internalFetchServices(true);
+    return services.map(service => {
+      const { unit, isUser } = service;
+      let recommendation = 'neutral';
+      let hint = 'General system service';
+
+      if (SERVICE_CATEGORIES.UNSAFE_TO_STOP.some(p => unit.includes(p))) {
+        recommendation = 'unsafe';
+        hint = 'Stopping this can break your system';
+      } else if (SERVICE_CATEGORIES.DISRUPTIVE_TO_STOP.some(p => unit.includes(p))) {
+        recommendation = 'disruptive';
+        hint = 'May reduce system functionality';
+      } else if (SERVICE_CATEGORIES.RECOMMENDED_TO_STOP.some(p => unit.includes(p))) {
+        recommendation = 'recommended';
+        hint = 'Safe to stop for gaming sessions';
+      }
+      
+      return { name: unit, isUser, recommendation, hint };
+    }).sort((a,b) => a.name.localeCompare(b.name));
   });
 
   // Reusable function to execute a command with sudo-prompt

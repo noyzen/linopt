@@ -184,28 +184,48 @@
             </div>
         </div>
     
-        <!-- Right Panel: Service List -->
+        <!-- Right Panel: Service List / Session Info -->
         <div id="gamemode-service-panel" class="gamemode-service-panel">
-          <div class="panel-header">
-            <h3>Services to Optimize</h3>
-            <div class="panel-controls">
-              <button id="gamemode-optimize-all-btn" class="link-btn">Optimize All</button>
-              <button id="gamemode-keep-all-btn" class="link-btn">Keep All</button>
+          <div id="gamemode-service-config" class="">
+            <div class="panel-header">
+              <h3>Services to Stop</h3>
+              <div class="panel-controls">
+                <button id="gamemode-add-service-btn" class="link-btn">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Add Service
+                </button>
+              </div>
+            </div>
+            <p class="panel-description">The following services will be stopped when Game Mode is activated. Remove any you wish to keep running.</p>
+            <div id="gamemode-service-list-wrapper" class="list-container">
+              <div id="gamemode-service-list" class="list-content">
+                <!-- Optimizable services will be dynamically inserted here -->
+              </div>
+              <div id="gamemode-loader" class="hidden">
+                <div class="spinner"></div>
+                <p>Scanning for optimizable services...</p>
+              </div>
+              <div class="empty-state hidden" data-empty-for="gamemode-service-list">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <h2>All Clear!</h2>
+                <p>No running, non-essential services were found. You can add services to the list manually.</p>
+              </div>
             </div>
           </div>
-          <p class="panel-description">Uncheck any services you wish to keep running during Game Mode.</p>
-          <div class="list-container">
-            <div id="gamemode-service-list" class="list-content">
-              <!-- Optimizable services will be dynamically inserted here -->
+          <div id="gamemode-session-info" class="gamemode-session-info hidden">
+            <h3>Active Session</h3>
+            <div class="session-stat">
+              <span id="session-stopped-count" class="stat-value">0</span>
+              <span class="stat-label">Services Stopped</span>
             </div>
-            <div id="gamemode-loader" class="hidden">
-              <div class="spinner"></div>
-              <p>Scanning for optimizable services...</p>
-            </div>
-            <div class="empty-state hidden" data-empty-for="gamemode-service-list">
-              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-              <h2>All Clear!</h2>
-              <p>No running, non-essential services were found to optimize.</p>
+            <div class="session-details">
+              <h4>Changes Applied:</h4>
+              <ul>
+                <li>Live system monitoring has been temporarily disabled.</li>
+                <li>Selected non-essential services have been stopped.</li>
+              </ul>
+              <h4>What to do next?</h4>
+              <p>You can close Linopt while you play and your system will remain optimized. Re-open the app and deactivate Game Mode when you're finished.</p>
             </div>
           </div>
         </div>
@@ -270,18 +290,14 @@
 
   <!-- Template for a game mode service row -->
   <template id="gamemode-service-row-template">
-    <div class="gamemode-service-row">
+    <div class="gamemode-service-row" role="listitem">
       <div class="gamemode-service-info">
         <span class="service-name"></span>
         <span class="service-hint"></span>
       </div>
-      <div class="toggle-container">
-        <span class="toggle-label">Keep running</span>
-        <label class="toggle-switch">
-          <input type="checkbox" class="keep-running-toggle" aria-label="Keep this service running">
-          <span class="slider"></span>
-        </label>
-      </div>
+      <button class="btn-remove-gamemode" title="Remove from list" aria-label="Remove from list">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
     </div>
   </template>
 
@@ -295,6 +311,23 @@
           <span class="slider"></span>
         </label>
       </div>
+    </div>
+  </template>
+
+  <!-- Template for add service modal row -->
+  <template id="add-service-row-template">
+    <div class="add-service-row">
+      <label class="add-service-label">
+        <input type="checkbox" class="add-service-checkbox">
+        <div class="service-details">
+          <span class="service-name"></span>
+          <span class="user-badge hidden">USER</span>
+        </div>
+        <div class="service-recommendation">
+           <span class="recommendation-badge"></span>
+           <span class="service-hint"></span>
+        </div>
+      </label>
     </div>
   </template>
 

@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- STATE ---
   let allServicesCache = [];
   let changesLog = [];
-  let gameModeState = { isOn: false, stoppedServices: [], userExclusions: [] };
+  let gameModeState = { isOn: false, stoppedServices: [], servicesToStop: [] };
   let confirmCallback = null;
   const LOG_LIMIT = 500; // Cap logs to prevent performance issues
 
@@ -43,16 +43,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const gameModeMainLoader = document.getElementById('gamemode-main-loader');
   const gameModeLoaderText = document.getElementById('gamemode-loader-text');
   const gameModeActiveInfo = document.getElementById('gamemode-active-info');
-  const gameModeServicePanel = document.getElementById('gamemode-service-panel');
+  const gameModeServiceConfig = document.getElementById('gamemode-service-config');
+  const gameModeSessionInfo = document.getElementById('gamemode-session-info');
+  const sessionStoppedCount = document.getElementById('session-stopped-count');
   const gameModeServiceList = document.getElementById('gamemode-service-list');
   const gameModeServiceRowTemplate = document.getElementById('gamemode-service-row-template');
   const gameModeLoader = document.getElementById('gamemode-loader');
-  const gameModeOptimizeAllBtn = document.getElementById('gamemode-optimize-all-btn');
-  const gameModeKeepAllBtn = document.getElementById('gamemode-keep-all-btn');
+  const gameModeAddServiceBtn = document.getElementById('gamemode-add-service-btn');
   const gameModeStoppedListContainer = document.getElementById('gamemode-stopped-list-container');
   const gameModeStoppedList = document.getElementById('gamemode-stopped-list');
   const stoppedServiceCount = document.getElementById('stopped-service-count');
-
 
   // Window controls
   const minimizeBtn = document.getElementById('min-btn');
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalTitle = document.getElementById('modal-title');
   const modalMessage = document.getElementById('modal-message');
   const modalListContainer = document.getElementById('modal-list-container');
-  const restoreServiceRowTemplate = document.getElementById('restore-service-row-template');
+  const addServiceRowTemplate = document.getElementById('add-service-row-template');
   const modalConfirmBtn = document.getElementById('modal-confirm-btn');
   const modalCancelBtn = document.getElementById('modal-cancel-btn');
   const modalContent = confirmationDialog.querySelector('.modal-content');
@@ -142,713 +142,757 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   };
   
-  const populateServiceList = (services) => {
+  const renderServices = (services) => {
     serviceList.innerHTML = '';
-    updateServiceStats(allServicesCache); // Update stats based on the full cache
-    toggleEmptyState('service-list', !services || services.length === 0);
+    const fragment = document.createDocumentFragment();
 
-    if (!services || services.length === 0) return;
+    const sortedServices = services.sort((a, b) => a.unit.localeCompare(b.unit));
+
+    if (sortedServices.length === 0) {
+      toggleEmptyState('service-list', true);
+      return;
+    }
+
+    toggleEmptyState('service-list', false);
     
-    // Sort services alphabetically by unit name
-    services.sort((a, b) => a.unit.localeCompare(b.unit));
-
-    services.forEach((service) => {
+    sortedServices.forEach(service => {
       const serviceRow = serviceRowTemplate.content.cloneNode(true);
-      const rowElement = serviceRow.querySelector('.service-row');
+      const serviceRowEl = serviceRow.querySelector('.service-row');
+      const statusDot = serviceRow.querySelector('.status-dot');
       const serviceName = serviceRow.querySelector('.service-name');
       const userBadge = serviceRow.querySelector('.user-badge');
-      const statusDot = serviceRow.querySelector('.status-dot');
       const enableToggle = serviceRow.querySelector('.enable-toggle');
       const startBtn = serviceRow.querySelector('.btn-start');
       const stopBtn = serviceRow.querySelector('.btn-stop');
       const restartBtn = serviceRow.querySelector('.btn-restart');
       
-      const unitName = service.unit;
-      const isUserService = service.isUser;
+      serviceRowEl.dataset.serviceName = service.unit;
+      serviceRowEl.dataset.isUser = service.isUser;
       
-      serviceName.textContent = unitName;
-      serviceName.title = unitName;
-      rowElement.dataset.serviceName = unitName;
+      serviceName.textContent = service.unit;
+      userBadge.classList.toggle('hidden', !service.isUser);
 
-      userBadge.classList.toggle('hidden', !isUserService);
-
-      statusDot.classList.remove('active', 'failed', 'inactive');
-      statusDot.classList.add(service.active);
-      statusDot.title = `Status: ${service.active} | ${service.sub}`;
-
-      enableToggle.checked = service.unit_file_state === 'enabled';
-      
       const isActive = service.active === 'active';
+      const isEnabledOnBoot = service.unit_file_state === 'enabled';
+      const isStatic = service.unit_file_state === 'static';
+      
+      statusDot.classList.toggle('active', isActive);
+      statusDot.classList.toggle('failed', service.active === 'failed' || service.active === 'inactive');
+      statusDot.title = `Status: ${service.active} (${service.sub})`;
+
+      enableToggle.checked = isEnabledOnBoot;
+      enableToggle.disabled = isStatic;
+      enableToggle.closest('.toggle-container').title = isStatic ? 'This service cannot be enabled or disabled on boot.' : `Set to ${isEnabledOnBoot ? 'run' : 'not run'} on boot`;
+      
       startBtn.disabled = isActive;
       stopBtn.disabled = !isActive;
       restartBtn.disabled = !isActive;
-
-      // --- Event Listeners with Confirmation ---
-      enableToggle.addEventListener('change', (e) => {
-        const isEnabled = e.target.checked;
-        e.target.checked = !isEnabled; // Revert visual state immediately
-
-        const action = isEnabled ? 'Enable' : 'Disable';
-        showConfirmationDialog({
-          title: `${action} Service on Boot`,
-          message: `Are you sure you want to <strong>${action.toLowerCase()}</strong> the service <em>${unitName}</em>?`,
-          confirmText: action,
-          confirmClass: isEnabled ? '' : 'btn-danger',
-          onConfirm: async () => {
-            updateStatus(`${action}ing ${unitName}...`);
-            try {
-              if (isEnabled) {
-                await window.electronAPI.systemd.enableService(unitName, isUserService);
-              } else {
-                await window.electronAPI.systemd.disableService(unitName, isUserService);
-              }
-              // The watcher will pick up the change and update the UI
-              updateStatus(`Successfully sent ${action} command for ${unitName}.`);
-              logChange(action, unitName, 'Success');
-            } catch (err) {
-              updateStatus(`Error: ${err.message}`, true);
-              logChange(action, unitName, 'Failed');
-            }
-          },
-        });
-      });
       
-      const createControlHandler = (actionFn, verb) => () => {
-        let confirmClass = '';
-        if (verb === 'Stop') confirmClass = 'btn-danger';
-
-        showConfirmationDialog({
-          title: `Confirm ${verb} Service`,
-          message: `Are you sure you want to <strong>${verb.toLowerCase()}</strong> the service <em>${unitName}</em>?`,
-          confirmText: verb,
-          confirmClass,
-          onConfirm: async () => {
-            updateStatus(`${verb}ing ${unitName}...`);
-            try {
-              await actionFn(unitName, isUserService);
-              updateStatus(`Successfully sent ${verb} signal to ${unitName}. Status will update shortly.`);
-              logChange(verb, unitName, 'Success');
-            } catch (err) {
-               updateStatus(`Error: ${err.message}`, true);
-               logChange(verb, unitName, 'Failed');
-            }
-          },
-        });
-      };
-
-      startBtn.addEventListener('click', createControlHandler(window.electronAPI.systemd.startService, 'Start'));
-      stopBtn.addEventListener('click', createControlHandler(window.electronAPI.systemd.stopService, 'Stop'));
-      restartBtn.addEventListener('click', createControlHandler(window.electronAPI.systemd.restartService, 'Restart'));
-
-      serviceList.appendChild(serviceRow);
+      fragment.appendChild(serviceRow);
     });
-  };
-
-  const renderServiceListFromCache = () => {
-    const searchTerm = searchInput.value.toLowerCase();
-    const filteredServices = allServicesCache.filter(service => 
-      service.unit.toLowerCase().includes(searchTerm)
-    );
-    populateServiceList(filteredServices);
-  };
-
-  const loadServices = async () => {
-    loader.classList.remove('hidden');
-    serviceList.classList.add('hidden');
-    const includeUser = userServicesToggle.checked;
-    updateStatus('Loading services...');
     
-    try {
-      const services = await window.electronAPI.systemd.getServices(includeUser);
-      allServicesCache = services;
-      searchInput.value = '';
-      renderServiceListFromCache();
-      updateStatus(`Loaded ${services.length} services.`);
-    } catch (err) {
-      allServicesCache = [];
-      renderServiceListFromCache();
-      updateStatus(`Failed to load services: ${err.message}`, true);
-    } finally {
-      loader.classList.add('hidden');
-      serviceList.classList.remove('hidden');
-    }
+    serviceList.appendChild(fragment);
   };
 
-  const handleExport = async () => {
-    if (allServicesCache.length === 0) {
-      updateStatus('No services to export.', true);
-      return;
+  const getFilteredServices = () => {
+    const searchTerm = searchInput.value.toLowerCase();
+    const showUserServices = userServicesToggle.checked;
+
+    if (!searchTerm && showUserServices) {
+      return allServicesCache;
     }
-
-    // Sort for consistent output
-    const sortedServices = [...allServicesCache].sort((a, b) => a.unit.localeCompare(b.unit));
-
-    const header = 'STATUS      ENABLED       SERVICE\n';
-    const divider = '==================================================\n';
-
-    const lines = sortedServices.map(service => {
-      const status = (service.active === 'active' ? 'RUNNING' : 'STOPPED').padEnd(12);
-      const enabled = (service.unit_file_state || 'static').toUpperCase().padEnd(14);
-      return `${status}${enabled}${service.unit}`;
+    
+    return allServicesCache.filter(service => {
+      const matchesSearch = service.unit.toLowerCase().includes(searchTerm);
+      const matchesUserFilter = showUserServices || !service.isUser;
+      return matchesSearch && matchesUserFilter;
     });
+  };
 
-    const content = header + divider + lines.join('\n');
-
-    updateStatus('Exporting service list...');
-    try {
-      const result = await window.electronAPI.saveExportedFile(content);
-      if (result.success) {
-        updateStatus(`Successfully exported services to a file.`);
-      } else if (result.message !== 'Export canceled by user.') {
-        updateStatus(`Export failed: ${result.message}`, true);
-      } else {
-        updateStatus('Export canceled.');
-      }
-    } catch (err) {
-      updateStatus(`Export error: ${err.message}`, true);
-    }
+  const refreshAndRenderServices = () => {
+    const filteredServices = getFilteredServices();
+    renderServices(filteredServices);
+    // Only update stats based on the currently filtered view if a search term is present.
+    // Otherwise, show stats for all loaded services.
+    const statsSource = searchInput.value ? filteredServices : allServicesCache.filter(s => userServicesToggle.checked || !s.isUser);
+    updateServiceStats(statsSource);
   };
   
+  const fetchServices = async () => {
+    loader.classList.remove('hidden');
+    serviceList.innerHTML = '';
+    toggleEmptyState('service-list', false);
+    systemdError.classList.add('hidden');
+    updateStatus('Loading SystemD services...');
+
+    try {
+      const services = await window.electronAPI.systemd.getServices(true);
+      allServicesCache = services;
+      refreshAndRenderServices();
+      updateStatus('Ready', false);
+    } catch (error) {
+      console.error('Failed to fetch services:', error);
+      updateStatus(`Error: ${error.message}`, true);
+      toggleEmptyState('service-list', true);
+    } finally {
+      loader.classList.add('hidden');
+    }
+  };
+
+  const checkSystemd = async () => {
+    const hasSystemd = await window.electronAPI.systemd.check();
+    if (!hasSystemd) {
+      loader.classList.add('hidden');
+      systemdError.classList.remove('hidden');
+      updateStatus('SystemD not detected on this system.', true);
+      return false;
+    }
+    return true;
+  };
+
   // --- Change Log Logic ---
 
-  const loadPersistentLogs = async () => {
-    try {
-      const storedLogs = await window.electronAPI.logs.get();
-      // Revive date objects from their ISO string representation
-      changesLog = storedLogs.map(log => ({
-        ...log,
-        timestamp: new Date(log.timestamp),
-      })).sort((a, b) => b.timestamp - a.timestamp); // Ensure newest first
-    } catch (error) {
-      console.error("Failed to load persistent logs:", error);
-      changesLog = [];
+  const saveLogs = () => {
+    window.electronAPI.logs.set(changesLog);
+  };
+
+  const logChange = (action, serviceName, status, error = null) => {
+    const logEntry = {
+      action,
+      serviceName,
+      status,
+      timestamp: new Date().toISOString(),
+      error: error ? error.message : null,
+    };
+    changesLog.unshift(logEntry);
+    if (changesLog.length > LOG_LIMIT) {
+        changesLog.pop();
+    }
+    saveLogs();
+    // Re-render if the changes view is active
+    if (document.getElementById('changes-view').offsetParent !== null) {
+      renderChanges();
     }
   };
 
-  let saveTimeout;
-  const savePersistentLogs = () => {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      // The Date objects will be converted to ISO strings automatically by the IPC mechanism
-      window.electronAPI.logs.set(changesLog);
-    }, 1000); // Debounce saves by 1 second
+  const loadLogs = async () => {
+    changesLog = await window.electronAPI.logs.get();
+    renderChanges();
   };
 
-  const getActionIcon = (action) => {
-    switch (action.toLowerCase()) {
-      case 'add':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>`;
-      case 'remove':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>`;
-      case 'enable':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-      case 'disable':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-      case 'start':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
-      case 'stop':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>`;
-      case 'restart':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
-      case 'game mode':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12.553a10.974 10.974 0 0 1 19 0"/><path d="M12 18.553v-5.023"/><path d="M12 21.523a2.47 2.47 0 0 1-1.235-.353 2.47 2.47 0 0 1-1.235.353A2.5 2.5 0 0 1 7 19.053V14.5a2.5 2.5 0 0 1 2.5-2.5h5a2.5 2.5 0 0 1 2.5 2.5v4.553a2.5 2.5 0 0 1-2.523 2.47 2.47 2.47 0 0 1-1.235-.353 2.47 2.47 0 0 1-1.235.353Z"/><path d="M8.5 11.5v-3a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 .5.5v3"/><path d="M15.5 11.5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1"/></svg>`;
-      case 'failed':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
-      case 'detected':
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
-      default:
-        return '';
-    }
-  };
-
-  const getRelativeDateString = (date) => {
+  const groupChangesByDate = (changes) => {
+    const groups = {
+      Today: [],
+      Yesterday: [],
+      'Last 7 Days': [],
+      'Last 30 Days': [],
+      Older: [],
+    };
+    
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    const logDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  
-    if (logDate.getTime() === today.getTime()) return 'Today';
-    if (logDate.getTime() === yesterday.getTime()) return 'Yesterday';
-    
-    const oneWeekAgo = new Date(today);
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    if (logDate > oneWeekAgo) {
-      return logDate.toLocaleDateString(undefined, { weekday: 'long' }); // e.g., "Monday"
+    const last7Days = new Date(today);
+    last7Days.setDate(last7Days.getDate() - 7);
+    const last30Days = new Date(today);
+    last30Days.setDate(last30Days.getDate() - 30);
+
+    for (const change of changes) {
+      const changeDate = new Date(change.timestamp);
+      if (changeDate >= today) {
+        groups.Today.push(change);
+      } else if (changeDate >= yesterday) {
+        groups.Yesterday.push(change);
+      } else if (changeDate >= last7Days) {
+        groups['Last 7 Days'].push(change);
+      } else if (changeDate >= last30Days) {
+        groups['Last 30 Days'].push(change);
+      } else {
+        groups.Older.push(change);
+      }
     }
-    
-    // Default to a specific date format
-    return logDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    return groups;
   };
 
-  const renderChangesList = () => {
+  const getActionIcon = (action) => {
+    switch(action) {
+      case 'Enable': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+      case 'Disable': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`;
+      case 'Start': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+      case 'Stop': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>`;
+      case 'Restart': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
+      case 'Game Mode': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.78 17.09c.28.14.59.22.92.22a2 2 0 0 0 1.64-.89l.38-.6a2 2 0 0 1 3.4 0l.38.6a2 2 0 0 0 1.64.89c.33 0 .64-.08.92-.22l2.4-1.2a2 2 0 0 0 1.16-1.7V12a2 2 0 0 0-1-1.75l-4-2.5a2 2 0 0 0-2 0l-4 2.5a2 2 0 0 0-1 1.75v2.19a2 2 0 0 0 1.16 1.7z"></path><path d="M12 12V5a3 3 0 0 1 3-3h3a2 2 0 0 1 2 2v2"></path></svg>`;
+      case 'Add': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+      case 'Remove': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+      case 'Detected': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>`;
+      default: return '';
+    }
+  };
+
+  const getFilteredChanges = () => {
     const searchTerm = searchChangesInput.value.toLowerCase();
     const activeFilter = changeFilters.querySelector('[aria-pressed="true"]').dataset.filter;
 
-    const filteredLogs = changesLog.filter(log => {
-      const matchesSearch = log.service.toLowerCase().includes(searchTerm);
-      // Corrected logic: Check if filter matches action OR status
-      const matchesFilter = activeFilter === 'all' || log.action === activeFilter || log.status === activeFilter;
+    return changesLog.filter(log => {
+      const matchesSearch = log.serviceName.toLowerCase().includes(searchTerm) || log.action.toLowerCase().includes(searchTerm);
+      if (activeFilter === 'all') {
+        return matchesSearch;
+      }
+      const matchesFilter = log.action.includes(activeFilter) || log.status.includes(activeFilter);
       return matchesSearch && matchesFilter;
     });
-
-    populateChangesList(filteredLogs);
   };
 
-  const populateChangesList = (logs) => {
+  const renderChanges = () => {
     changeList.innerHTML = '';
-    toggleEmptyState('change-list', logs.length === 0);
+    const filteredChanges = getFilteredChanges();
 
-    if (logs.length === 0) return;
+    if (filteredChanges.length === 0) {
+      toggleEmptyState('change-list', true);
+      return;
+    }
 
-    let lastHeader = null;
+    toggleEmptyState('change-list', false);
+    const grouped = groupChangesByDate(filteredChanges);
     const fragment = document.createDocumentFragment();
 
-    logs.forEach((log) => {
-      const dateHeaderString = getRelativeDateString(log.timestamp);
-      if (dateHeaderString !== lastHeader) {
-          const headerTpl = changeHeaderTemplate.content.cloneNode(true);
-          const headerEl = headerTpl.querySelector('.change-log-header');
-          headerEl.textContent = dateHeaderString;
-          fragment.appendChild(headerTpl);
-          lastHeader = dateHeaderString;
+    for (const groupName in grouped) {
+      if (grouped[groupName].length > 0) {
+        const header = changeHeaderTemplate.content.cloneNode(true);
+        header.querySelector('.change-log-header').textContent = groupName;
+        fragment.appendChild(header);
+
+        grouped[groupName].forEach(log => {
+          const row = changeRowTemplate.content.cloneNode(true);
+          const changeInfo = row.querySelector('.change-info');
+          
+          row.querySelector('.change-icon').innerHTML = getActionIcon(log.action);
+          row.querySelector('.change-action').textContent = log.action;
+          row.querySelector('.change-service').textContent = log.serviceName;
+          
+          changeInfo.dataset.action = log.action;
+          
+          const statusEl = row.querySelector('.change-status');
+          statusEl.textContent = log.status;
+          statusEl.dataset.status = log.status;
+
+          const time = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          row.querySelector('.change-time').textContent = time;
+          
+          if (log.error) {
+            row.querySelector('.change-row').title = `Error: ${log.error}`;
+          }
+
+          fragment.appendChild(row);
+        });
       }
-
-      const changeRow = changeRowTemplate.content.cloneNode(true);
-      const infoEl = changeRow.querySelector('.change-info');
-      const iconEl = changeRow.querySelector('.change-icon');
-      const actionEl = changeRow.querySelector('.change-action');
-      const serviceEl = changeRow.querySelector('.change-service');
-      const statusEl = changeRow.querySelector('.change-status');
-      const timeEl = changeRow.querySelector('.change-time');
-
-      infoEl.dataset.action = log.action;
-      iconEl.innerHTML = getActionIcon(log.action);
-      actionEl.textContent = log.action;
-      serviceEl.textContent = log.service;
-      statusEl.textContent = log.status;
-      statusEl.dataset.status = log.status;
-      timeEl.textContent = log.timestamp.toLocaleTimeString();
-      
-      fragment.appendChild(changeRow);
-    });
+    }
     changeList.appendChild(fragment);
   };
 
-  const logChange = (action, service, status) => {
-    changesLog.unshift({ action, service, status, timestamp: new Date() });
-    if (changesLog.length > LOG_LIMIT) {
-      changesLog.length = LOG_LIMIT; // Prune old logs to maintain performance
+  // --- Modal Logic ---
+  
+  const showModal = (config) => {
+    modalTitle.textContent = config.title;
+    modalMessage.innerHTML = config.message;
+    
+    modalConfirmBtn.textContent = config.confirmText || 'Confirm';
+    modalConfirmBtn.className = config.danger ? 'btn-danger' : '';
+    modalCancelBtn.textContent = config.cancelText || 'Cancel';
+    
+    modalContent.classList.toggle('large', !!config.large);
+    modalListContainer.classList.add('hidden');
+    modalListContainer.innerHTML = '';
+    
+    if (config.listContent) {
+      modalListContainer.innerHTML = config.listContent;
+      modalListContainer.classList.remove('hidden');
     }
-    if(document.getElementById('changes-view').classList.contains('hidden') === false) {
-      renderChangesList();
-    }
-    savePersistentLogs();
+
+    confirmCallback = config.onConfirm;
+
+    confirmationDialog.classList.remove('hidden');
   };
 
-  const clearChanges = () => {
-    showConfirmationDialog({
-      title: 'Clear Change Log',
-      message: 'Are you sure you want to clear the entire change log? This action cannot be undone.',
-      confirmText: 'Clear Log',
-      confirmClass: 'btn-danger',
-      onConfirm: () => {
-        changesLog = [];
-        renderChangesList();
-        savePersistentLogs(); // Persist the empty array
-        updateStatus('Change log cleared.');
-      }
-    });
+  const hideModal = () => {
+    confirmationDialog.classList.add('hidden');
+    confirmCallback = null;
   };
   
+  // --- Service Actions ---
+  
+  const handleServiceAction = async (action, serviceName, isUser) => {
+    updateStatus(`Requesting to ${action} ${serviceName}...`);
+    try {
+      const result = await window.electronAPI.systemd[`${action}Service`](serviceName, isUser);
+      if (result.success) {
+        updateStatus(`Successfully ${action}ed ${serviceName}.`, false);
+        logChange(action.charAt(0).toUpperCase() + action.slice(1), serviceName, 'Success');
+        // Trigger a targeted refresh of just this row after a short delay
+        setTimeout(() => fetchServices(), 500);
+      }
+    } catch (error) {
+      updateStatus(`Error: ${error.message}`, true);
+      logChange(action.charAt(0).toUpperCase() + action.slice(1), serviceName, 'Failed', error);
+    }
+  };
+
   // --- Game Mode Logic ---
 
   const saveGameModeState = () => {
     window.electronAPI.gamemode.setState(gameModeState);
   };
   
-  const populateGameModeServiceList = (services) => {
-      gameModeServiceList.innerHTML = '';
-      toggleEmptyState('gamemode-service-list', services.length === 0);
-
-      const currentServiceNames = services.map(s => s.name);
-      // Prune stale exclusions from state to keep it clean
-      gameModeState.userExclusions = gameModeState.userExclusions.filter(exclusion => currentServiceNames.includes(exclusion));
-      saveGameModeState();
-
-      services.forEach(service => {
-        const row = gameModeServiceRowTemplate.content.cloneNode(true);
-        const serviceNameEl = row.querySelector('.service-name');
-        const serviceHintEl = row.querySelector('.service-hint');
-        const keepRunningToggle = row.querySelector('.keep-running-toggle');
-
-        serviceNameEl.textContent = service.name;
-        serviceNameEl.title = service.name;
-        serviceHintEl.textContent = service.hint;
-        
-        keepRunningToggle.dataset.serviceName = service.name;
-        // Checked means KEEP running. This is now intuitive.
-        keepRunningToggle.checked = gameModeState.userExclusions.includes(service.name);
-
-        keepRunningToggle.addEventListener('change', (e) => {
-            const serviceName = e.target.dataset.serviceName;
-            if (e.target.checked) {
-                // Keep running = add to user exclusions
-                if (!gameModeState.userExclusions.includes(serviceName)) {
-                    gameModeState.userExclusions.push(serviceName);
-                }
-            } else {
-                // Don't keep running = remove from user exclusions
-                gameModeState.userExclusions = gameModeState.userExclusions.filter(s => s !== serviceName);
-            }
-            saveGameModeState();
-        });
-        gameModeServiceList.appendChild(row);
-      });
-  };
-
-  const loadOptimizableServicesPanel = async () => {
+  const loadGameModeState = async () => {
+    gameModeState = await window.electronAPI.gamemode.getState();
+    // Auto-populate with recommended services if the list is empty
+    if (!gameModeState.servicesToStop || gameModeState.servicesToStop.length === 0) {
       gameModeLoader.classList.remove('hidden');
-      gameModeServiceList.innerHTML = '';
-      toggleEmptyState('gamemode-service-list', false);
       try {
-        const services = await window.electronAPI.systemd.getOptimizableServices();
-        populateGameModeServiceList(services);
-      } catch (err) {
-        updateStatus(`Error scanning for optimizable services: ${err.message}`, true);
-        toggleEmptyState('gamemode-service-list', true); // Show empty state on error
+        const recommended = await window.electronAPI.systemd.getOptimizableServices();
+        gameModeState.servicesToStop = recommended;
+        saveGameModeState();
+      } catch (error) {
+        console.error('Failed to auto-populate Game Mode services:', error);
       } finally {
         gameModeLoader.classList.add('hidden');
       }
+    }
+    renderGameModeUI();
+    populateGameModeServices();
   };
-
-  const updateGameModeUI = () => {
+  
+  const renderGameModeUI = () => {
+    const { isOn, stoppedServices } = gameModeState;
+  
+    // Update Control Panel
+    gameModeStatusCard.dataset.status = isOn ? 'active' : 'inactive';
+    gameModeStatusIcon.innerHTML = isOn
+      ? `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`
+      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.78 17.09c.28.14.59.22.92.22a2 2 0 0 0 1.64-.89l.38-.6a2 2 0 0 1 3.4 0l.38.6a2 2 0 0 0 1.64.89c.33 0 .64-.08.92-.22l2.4-1.2a2 2 0 0 0 1.16-1.7V12a2 2 0 0 0-1-1.75l-4-2.5a2 2 0 0 0-2 0l-4 2.5a2 2 0 0 0-1 1.75v2.19a2 2 0 0 0 1.16 1.7z"></path><path d="M12 12V5a3 3 0 0 1 3-3h3a2 2 0 0 1 2 2v2"></path></svg>`;
+    gameModeStatusTitle.textContent = isOn ? 'Game Mode is Active' : 'Game Mode';
+    gameModeStatusDescription.textContent = isOn ? 'System optimized for performance.' : 'Optimize system performance.';
+    
+    gameModeActionBtn.dataset.action = isOn ? 'deactivate' : 'activate';
+    gameModeActionBtn.innerHTML = isOn
+      ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg><span>Deactivate</span>`
+      : `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>Activate</span>`;
+    
+    gameModeActiveInfo.classList.toggle('hidden', !isOn);
+    gameModeStoppedListContainer.classList.toggle('hidden', !isOn || !stoppedServices || stoppedServices.length === 0);
+  
+    // Toggle Right Panel Content
+    gameModeServiceConfig.classList.toggle('hidden', isOn);
+    gameModeSessionInfo.classList.toggle('hidden', !isOn);
+  
+    if (isOn) {
+      sessionStoppedCount.textContent = stoppedServices.length;
+      stoppedServiceCount.textContent = stoppedServices.length;
+      gameModeStoppedList.innerHTML = stoppedServices.map(s => `<li>${s}</li>`).join('');
+    }
+  
     gameModeMainLoader.classList.add('hidden');
     gameModeActionBtn.disabled = false;
-    
-    if (gameModeState.isOn) {
-      // --- ACTIVE STATE ---
-      gameModeStatusCard.dataset.status = 'active';
-      gameModeStatusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg>`;
-      gameModeStatusTitle.textContent = 'Game Mode is Active';
-      gameModeStatusDescription.textContent = `Click below to deactivate and restore stopped services.`;
-      
-      gameModeActionBtn.dataset.action = 'deactivate';
-      gameModeActionBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg><span>Deactivate Game Mode</span>`;
-      
-      gameModeServicePanel.classList.add('hidden');
-      gameModeActiveInfo.classList.remove('hidden');
-
-      const count = gameModeState.stoppedServices.length;
-      if (count > 0) {
-        gameModeStoppedListContainer.classList.remove('hidden');
-        stoppedServiceCount.textContent = count;
-        gameModeStoppedList.innerHTML = gameModeState.stoppedServices.map(s => `<li>${s}</li>`).join('');
-      } else {
-        gameModeStoppedListContainer.classList.add('hidden');
-      }
-
+  };
+  
+  const populateGameModeServices = () => {
+    gameModeServiceList.innerHTML = '';
+    toggleEmptyState('gamemode-service-list', false);
+  
+    const services = gameModeState.servicesToStop || [];
+    const fragment = document.createDocumentFragment();
+  
+    if (services.length === 0) {
+      toggleEmptyState('gamemode-service-list', true);
     } else {
-      // --- INACTIVE STATE ---
-      gameModeStatusCard.dataset.status = 'inactive';
-      gameModeStatusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>`;
-      gameModeStatusTitle.textContent = 'Game Mode is Inactive';
-      gameModeStatusDescription.textContent = 'Optimize your system by temporarily stopping non-essential services.';
-
-      gameModeActionBtn.dataset.action = 'activate';
-      gameModeActionBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg><span>Activate Game Mode</span>`;
-
-      gameModeServicePanel.classList.remove('hidden');
-      gameModeActiveInfo.classList.add('hidden');
-      gameModeStoppedListContainer.classList.add('hidden');
-      loadOptimizableServicesPanel();
+      services.forEach(service => {
+        const row = gameModeServiceRowTemplate.content.cloneNode(true);
+        const rowEl = row.querySelector('.gamemode-service-row');
+        
+        row.querySelector('.service-name').textContent = service.name;
+        row.querySelector('.service-hint').textContent = service.hint;
+        rowEl.dataset.serviceName = service.name;
+        
+        fragment.appendChild(row);
+      });
+      gameModeServiceList.appendChild(fragment);
     }
   };
-
-  const handleGameModeAction = async () => {
-    const activate = !gameModeState.isOn;
+  
+  const activateGameMode = async () => {
     gameModeActionBtn.disabled = true;
-    gameModeStatusDescription.classList.add('hidden');
     gameModeMainLoader.classList.remove('hidden');
+    gameModeLoaderText.textContent = 'Analyzing services...';
+  
+    try {
+      const servicesToStop = (gameModeState.servicesToStop || []).map(s => s.name);
+  
+      if (servicesToStop.length > 0) {
+        // Temporarily stop the watcher to prevent notifications for each service stop
+        window.electronAPI.watcher.stop();
+        liveUpdateServicesToggle.checked = false;
+        liveUpdateChangesToggle.checked = false;
+        toggleWatcher();
 
-    if (activate) {
-      gameModeLoaderText.textContent = 'Optimizing...';
-      
-      // Get the fresh list of currently running optimizable services
-      const optimizableServices = await window.electronAPI.systemd.getOptimizableServices();
-      const serviceNames = optimizableServices.map(s => s.name);
-      
-      // Determine which services to stop based on the user's exclusion list
-      const servicesToStop = serviceNames.filter(name => !gameModeState.userExclusions.includes(name));
-
-      if (servicesToStop.length === 0) {
-        updateStatus('No services to stop for Game Mode.', false);
-        logChange('Game Mode', `Activated (0 services stopped)`, 'Success');
-        gameModeState.isOn = true;
+        gameModeLoaderText.textContent = `Stopping ${servicesToStop.length} services...`;
+        await window.electronAPI.systemd.stopServicesBatch(servicesToStop);
+        gameModeState.stoppedServices = servicesToStop;
+        logChange('Game Mode', `Stopped ${servicesToStop.length} services`, 'Success');
+      } else {
         gameModeState.stoppedServices = [];
-        saveGameModeState();
-      } else {
-        updateStatus(`Activating Game Mode... Stopping ${servicesToStop.length} services.`);
-        try {
-          await window.electronAPI.systemd.stopServicesBatch(servicesToStop);
-          logChange('Game Mode', `Activated (${servicesToStop.length} services stopped)`, 'Success');
-          updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
-          
-          gameModeState.isOn = true;
-          gameModeState.stoppedServices = servicesToStop;
-          saveGameModeState();
-          setLiveUpdateState(false); // Disable live updates to prevent interference
-        } catch (err) {
-          logChange('Game Mode', 'Activation', 'Failed');
-          updateStatus(`Could not activate Game Mode: ${err.message}`, true);
-        }
+        logChange('Game Mode', `No services needed to be stopped`, 'Success');
       }
-
-    } else { // Deactivate
-      gameModeLoaderText.textContent = 'Restoring...';
-      const servicesToRestore = gameModeState.stoppedServices;
-
-      if (servicesToRestore.length > 0) {
-        updateStatus(`Deactivating Game Mode... Restoring ${servicesToRestore.length} services.`);
-        try {
-          await window.electronAPI.systemd.startServicesBatch(servicesToRestore);
-          logChange('Game Mode', `Deactivated (${servicesToRestore.length} services restored)`, 'Success');
-          updateStatus(`${servicesToRestore.length} services restored.`);
-        } catch (err) {
-          logChange('Game Mode', 'Deactivation', 'Failed');
-          updateStatus(`Failed to restore services: ${err.message}`, true);
-        }
+  
+      gameModeState.isOn = true;
+      saveGameModeState();
+      renderGameModeUI();
+      updateStatus('Game Mode activated.', false);
+  
+    } catch (error) {
+      console.error('Failed to activate Game Mode:', error);
+      updateStatus(`Error activating Game Mode: ${error.message}`, true);
+      logChange('Game Mode', 'Activation failed', 'Failed', error);
+      gameModeActionBtn.disabled = false;
+      gameModeMainLoader.classList.add('hidden');
+    }
+  };
+  
+  const deactivateGameMode = async () => {
+    gameModeActionBtn.disabled = true;
+    gameModeMainLoader.classList.remove('hidden');
+    gameModeLoaderText.textContent = 'Restoring services...';
+    
+    try {
+      const servicesToStart = gameModeState.stoppedServices;
+      if (servicesToStart && servicesToStart.length > 0) {
+        await window.electronAPI.systemd.startServicesBatch(servicesToStart);
+        logChange('Game Mode', `Restored ${servicesToStart.length} services`, 'Success');
       } else {
-        logChange('Game Mode', 'Deactivated (0 services restored)', 'Success');
+        logChange('Game Mode', `No services needed to be restored`, 'Success');
       }
-      
+  
       gameModeState.isOn = false;
       gameModeState.stoppedServices = [];
       saveGameModeState();
-      updateStatus('Game Mode deactivated.');
-    }
+      renderGameModeUI();
+      updateStatus('Game Mode deactivated.', false);
 
-    gameModeStatusDescription.classList.remove('hidden');
-    updateGameModeUI();
-  };
+      // Re-enable watcher if the user wants it
+      liveUpdateServicesToggle.checked = true;
+      liveUpdateChangesToggle.checked = true;
+      toggleWatcher();
 
-  // --- View Switching ---
-  const switchView = (viewId) => {
-    navButtons.forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.view === viewId);
-    });
-
-    appViews.forEach(view => {
-      const isTargetView = view.id === viewId;
-      view.classList.toggle('hidden', !isTargetView);
-      if (isTargetView) {
-          if (viewId === 'changes-view') {
-            renderChangesList();
-          } else if (viewId === 'gamemode-view') {
-            updateGameModeUI();
-          }
-      }
-    });
-  };
-
-  // --- Real-time Change Detection ---
-  const handleServiceEvent = (data) => {
-    const { type, unit, isUser, oldState, newState } = data;
-    const serviceIndex = allServicesCache.findIndex(s => s.unit === unit);
-    const serviceExists = serviceIndex !== -1;
-
-    let logAction = '';
-    
-    switch (type) {
-        case 'added':
-            if (!serviceExists) {
-                const newService = { unit, isUser, ...newState };
-                allServicesCache.push(newService);
-                logAction = 'Add';
-            }
-            break;
-        case 'removed':
-            if (serviceExists) {
-                allServicesCache.splice(serviceIndex, 1);
-                logAction = 'Remove';
-            }
-            break;
-        case 'changed':
-            if (serviceExists) {
-                const service = allServicesCache[serviceIndex];
-                Object.assign(service, newState);
-
-                if (newState.active === 'failed' && oldState.active !== 'failed') logAction = 'Failed';
-                else if (oldState.active !== 'active' && newState.active === 'active') logAction = 'Start';
-                else if (oldState.active === 'active' && newState.active !== 'active') logAction = 'Stop';
-                else if (oldState.unit_file_state !== newState.unit_file_state) {
-                    logAction = newState.unit_file_state === 'enabled' ? 'Enable' : 'Disable';
-                }
-
-                const rowElement = serviceList.querySelector(`[data-service-name="${unit}"]`);
-                if (rowElement) {
-                    rowElement.classList.add('flash-update');
-                    rowElement.addEventListener('animationend', () => rowElement.classList.remove('flash-update'), { once: true });
-                }
-            }
-            break;
-    }
-    
-    if (logAction) {
-        logChange(logAction, unit, 'Detected');
-    }
-    
-    if (!document.getElementById('services-view').classList.contains('hidden')) {
-        renderServiceListFromCache();
+    } catch (error) {
+      console.error('Failed to deactivate Game Mode:', error);
+      updateStatus(`Error deactivating Game Mode: ${error.message}`, true);
+      logChange('Game Mode', 'Deactivation failed', 'Failed', error);
+      gameModeActionBtn.disabled = false;
+      gameModeMainLoader.classList.add('hidden');
     }
   };
 
-
-  // --- Modal Dialog Logic ---
-  const hideConfirmationDialog = () => {
-    confirmationDialog.classList.add('hidden');
-    confirmCallback = null;
-    // Add cleanup with a delay to allow animations to finish
-    setTimeout(() => {
-        modalListContainer.classList.add('hidden');
-        modalListContainer.innerHTML = '';
-        modalContent.classList.remove('large');
-    }, 300);
-  };
-
-  const showConfirmationDialog = ({ title, message, confirmText = 'Confirm', confirmClass = '', onConfirm, onCancel = () => {} }) => {
-    modalTitle.textContent = title;
-    modalMessage.innerHTML = message;
-    modalConfirmBtn.textContent = confirmText;
-    
-    modalConfirmBtn.className = ''; // Reset classes
-    if (confirmClass) {
-      modalConfirmBtn.classList.add(confirmClass);
-    }
-    
-    confirmCallback = onConfirm;
-    
-    const cancelHandler = () => {
-      hideConfirmationDialog();
-      onCancel();
-      modalCancelBtn.removeEventListener('click', cancelHandler);
-      confirmationDialog.removeEventListener('click', overlayClickHandler);
-    };
-
-    const overlayClickHandler = (e) => {
-       if (e.target === confirmationDialog) {
-          cancelHandler();
-       }
-    };
-    
-    modalCancelBtn.addEventListener('click', cancelHandler, { once: true });
-    confirmationDialog.addEventListener('click', overlayClickHandler, { once: true });
-    
-    confirmationDialog.classList.remove('hidden');
-  };
-
-  // --- Live Update Toggle Logic ---
-  const setLiveUpdateState = (isEnabled) => {
-    // Sync both toggles
-    liveUpdateServicesToggle.checked = isEnabled;
-    liveUpdateChangesToggle.checked = isEnabled;
-    
-    // Show/hide refresh buttons
-    refreshBtn.classList.toggle('hidden', isEnabled);
-    refreshChangesBtn.classList.toggle('hidden', isEnabled);
-    
-    if (isEnabled) {
-      window.electronAPI.watcher.start();
-      updateStatus('Live updates enabled.');
-      loadServices(); // Refresh on re-enabling
-    } else {
-      window.electronAPI.watcher.stop();
-      updateStatus('Live updates disabled. Use refresh button for manual updates.');
-    }
-  };
-
-  const handleLiveUpdateToggle = (event) => {
-    setLiveUpdateState(event.target.checked);
-  };
-
-  // --- Initialization ---
-  const initializeApp = async () => {
-    // Modal Listeners
-    modalConfirmBtn.addEventListener('click', () => {
-      if (typeof confirmCallback === 'function') {
-        confirmCallback();
-      }
-      hideConfirmationDialog();
-    });
-
-    setLiveUpdateState(false); // Set default state to OFF.
-
-    await loadPersistentLogs();
-    gameModeState = await window.electronAPI.gamemode.getState();
-    updateGameModeUI();
-
+  const openAddServiceModal = async () => {
+    updateStatus('Loading all services with recommendations...');
     try {
-      const hasSystemd = await window.electronAPI.systemd.check();
-      if (!hasSystemd) {
-        systemdError.classList.remove('hidden');
-        loader.classList.add('hidden');
-        updateStatus('SystemD not found on this system.', true);
-        return;
-      }
-      await loadServices();
-      
-      window.electronAPI.systemd.onServiceChanged(handleServiceEvent);
+      const allServices = await window.electronAPI.systemd.getServiceRecommendations();
+      const currentStopList = new Set((gameModeState.servicesToStop || []).map(s => s.name));
 
-    } catch (err) {
-      updateStatus(`Initialization error: ${err.message}`, true);
-      const errorEl = systemdError.querySelector('p');
-      if (errorEl) {
-          errorEl.textContent = `An error occurred during initialization: ${err.message}`;
-      }
-      systemdError.classList.remove('hidden');
-      loader.classList.add('hidden');
+      let listHtml = `
+        <div class="search-container modal-search-container">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="search" id="modal-search-input" placeholder="Filter services..." autocomplete="off">
+        </div>
+      `;
+
+      const fragment = document.createDocumentFragment();
+      allServices.forEach(service => {
+        const template = addServiceRowTemplate.content.cloneNode(true);
+        const row = template.querySelector('.add-service-row');
+        const checkbox = template.querySelector('.add-service-checkbox');
+        const badge = template.querySelector('.recommendation-badge');
+        
+        template.querySelector('.service-name').textContent = service.name;
+        template.querySelector('.user-badge').classList.toggle('hidden', !service.isUser);
+        template.querySelector('.service-hint').textContent = service.hint;
+        
+        badge.textContent = service.recommendation;
+        badge.dataset.level = service.recommendation;
+        
+        checkbox.value = service.name;
+        checkbox.dataset.hint = service.hint;
+        checkbox.disabled = currentStopList.has(service.name); // Disable if already in the list
+        
+        if(service.recommendation === 'unsafe') {
+          checkbox.disabled = true;
+          row.style.opacity = '0.6';
+          row.style.cursor = 'not-allowed';
+          row.querySelector('label').style.cursor = 'not-allowed';
+        }
+
+        fragment.appendChild(template);
+      });
+      
+      showModal({
+        title: 'Add Services to Game Mode',
+        message: 'Select services to add to the "stop list". Unsafe services cannot be added.',
+        confirmText: 'Add Selected',
+        large: true,
+        listContent: '',
+        onConfirm: () => {
+          const selectedServices = [];
+          modalListContainer.querySelectorAll('.add-service-checkbox:checked').forEach(cb => {
+            selectedServices.push({ name: cb.value, hint: cb.dataset.hint });
+          });
+
+          if (selectedServices.length > 0) {
+            const currentMap = new Map((gameModeState.servicesToStop || []).map(s => [s.name, s]));
+            selectedServices.forEach(s => currentMap.set(s.name, s));
+            gameModeState.servicesToStop = Array.from(currentMap.values()).sort((a,b) => a.name.localeCompare(b.name));
+            saveGameModeState();
+            populateGameModeServices();
+            logChange('Game Mode', `Added ${selectedServices.length} services to list`, 'Success');
+          }
+          hideModal();
+        },
+      });
+
+      modalListContainer.appendChild(fragment);
+
+      // Add live search functionality to the modal
+      const modalSearchInput = document.getElementById('modal-search-input');
+      modalSearchInput.addEventListener('input', () => {
+        const searchTerm = modalSearchInput.value.toLowerCase();
+        const rows = modalListContainer.querySelectorAll('.add-service-row');
+        rows.forEach(row => {
+          const serviceName = row.querySelector('.service-name').textContent.toLowerCase();
+          row.style.display = serviceName.includes(searchTerm) ? '' : 'none';
+        });
+      });
+
+
+    } catch (error) {
+      updateStatus('Failed to load services for modal.', true);
+      console.error(error);
     }
   };
 
   // --- Event Listeners ---
-  refreshBtn.addEventListener('click', loadServices);
-  exportBtn.addEventListener('click', handleExport);
-  refreshChangesBtn.addEventListener('click', renderChangesList);
-  userServicesToggle.addEventListener('change', loadServices);
-  searchInput.addEventListener('input', renderServiceListFromCache);
-  clearChangesBtn.addEventListener('click', clearChanges);
-  searchChangesInput.addEventListener('input', renderChangesList);
+  
+  navButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      navButtons.forEach(btn => btn.classList.remove('active'));
+      appViews.forEach(view => view.classList.add('hidden'));
 
-  changeFilters.addEventListener('click', (e) => {
-    if (e.target.matches('.filter-btn')) {
-      changeFilters.querySelectorAll('.filter-btn').forEach(btn => btn.setAttribute('aria-pressed', 'false'));
-      e.target.setAttribute('aria-pressed', 'true');
-      renderChangesList();
+      button.classList.add('active');
+      const viewId = button.dataset.view;
+      document.getElementById(viewId).classList.remove('hidden');
+
+      // Specific actions when switching to a view
+      if (viewId === 'changes-view') {
+        renderChanges();
+      } else if (viewId === 'gamemode-view') {
+        renderGameModeUI();
+        populateGameModeServices();
+      }
+    });
+  });
+
+  searchInput.addEventListener('input', refreshAndRenderServices);
+  searchChangesInput.addEventListener('input', renderChanges);
+  userServicesToggle.addEventListener('change', refreshAndRenderServices);
+
+  const toggleWatcher = () => {
+    const isLive = liveUpdateServicesToggle.checked || liveUpdateChangesToggle.checked;
+    refreshBtn.classList.toggle('hidden', isLive);
+    refreshChangesBtn.classList.toggle('hidden', isLive);
+    if (isLive) {
+      window.electronAPI.watcher.start();
+    } else {
+      window.electronAPI.watcher.stop();
+    }
+  };
+
+  liveUpdateServicesToggle.addEventListener('change', () => {
+    liveUpdateChangesToggle.checked = liveUpdateServicesToggle.checked;
+    toggleWatcher();
+  });
+
+  liveUpdateChangesToggle.addEventListener('change', () => {
+    liveUpdateServicesToggle.checked = liveUpdateChangesToggle.checked;
+    toggleWatcher();
+  });
+
+  refreshBtn.addEventListener('click', fetchServices);
+  refreshChangesBtn.addEventListener('click', renderChanges);
+
+  exportBtn.addEventListener('click', async () => {
+    const servicesToExport = getFilteredServices();
+    if (servicesToExport.length === 0) {
+      updateStatus('Nothing to export.', true);
+      return;
+    }
+    
+    let content = `Linopt Service Export - ${new Date().toLocaleString()}\n`;
+    content += `Showing User Services: ${userServicesToggle.checked}\n`;
+    content += `Filter: "${searchInput.value}"\n\n`;
+    content += 'Service Name'.padEnd(50) + 'Status'.padEnd(15) + 'Enabled on Boot\n';
+    content += '-'.repeat(80) + '\n';
+    
+    servicesToExport.forEach(s => {
+        content += `${s.unit.padEnd(50)}${s.active.padEnd(15)}${s.unit_file_state}\n`;
+    });
+    
+    updateStatus('Opening save dialog...');
+    const result = await window.electronAPI.saveExportedFile(content);
+    if (result.success) {
+      updateStatus(`Successfully exported to ${result.path}`, false);
+    } else if (result.message !== 'Export canceled by user.') {
+      updateStatus(`Export failed: ${result.message}`, true);
+    } else {
+      updateStatus('Ready', false);
     }
   });
 
-  liveUpdateServicesToggle.addEventListener('change', handleLiveUpdateToggle);
-  liveUpdateChangesToggle.addEventListener('change', handleLiveUpdateToggle);
 
-  navButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      switchView(button.dataset.view);
+  serviceList.addEventListener('click', e => {
+    const target = e.target;
+    const serviceRow = target.closest('.service-row');
+    if (!serviceRow) return;
+
+    const serviceName = serviceRow.dataset.serviceName;
+    const isUser = serviceRow.dataset.isUser === 'true';
+
+    if (target.closest('.enable-toggle')) {
+      const isEnabled = target.checked;
+      const action = isEnabled ? 'enable' : 'disable';
+      showModal({
+        title: `Confirm ${action}`,
+        message: `Are you sure you want to <strong>${action}</strong> <em>${serviceName}</em> on system boot?`,
+        danger: !isEnabled,
+        onConfirm: () => {
+          handleServiceAction(action, serviceName, isUser);
+          hideModal();
+        }
+      });
+    } else if (target.closest('.btn-start')) {
+      handleServiceAction('start', serviceName, isUser);
+    } else if (target.closest('.btn-stop')) {
+       showModal({
+        title: 'Confirm Stop',
+        message: `Are you sure you want to <strong>stop</strong> <em>${serviceName}</em>? This might affect system stability.`,
+        danger: true,
+        onConfirm: () => {
+          handleServiceAction('stop', serviceName, isUser);
+          hideModal();
+        }
+      });
+    } else if (target.closest('.btn-restart')) {
+      handleServiceAction('restart', serviceName, isUser);
+    }
+  });
+
+  changeFilters.addEventListener('click', (e) => {
+    const target = e.target.closest('.filter-btn');
+    if (target) {
+      changeFilters.querySelectorAll('.filter-btn').forEach(btn => btn.setAttribute('aria-pressed', 'false'));
+      target.setAttribute('aria-pressed', 'true');
+      renderChanges();
+    }
+  });
+
+  clearChangesBtn.addEventListener('click', () => {
+    showModal({
+      title: 'Clear Change Log',
+      message: 'Are you sure you want to permanently delete all log entries? This action cannot be undone.',
+      danger: true,
+      confirmText: 'Clear Log',
+      onConfirm: () => {
+        changesLog = [];
+        saveLogs();
+        renderChanges();
+        updateStatus('Change log cleared.', false);
+        hideModal();
+      }
     });
   });
 
-  gameModeActionBtn.addEventListener('click', handleGameModeAction);
-  
-  const setAllGameModeToggles = (checked) => {
-    gameModeServiceList.querySelectorAll('.keep-running-toggle').forEach(toggle => {
-      if (toggle.checked !== checked) {
-        toggle.checked = checked;
-        // Manually dispatch change event to update state
-        toggle.dispatchEvent(new Event('change'));
+  modalCancelBtn.addEventListener('click', hideModal);
+  modalConfirmBtn.addEventListener('click', () => {
+    if (confirmCallback) {
+      confirmCallback();
+    }
+  });
+  confirmationDialog.addEventListener('click', (e) => {
+    if (e.target === confirmationDialog) {
+      hideModal();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !confirmationDialog.classList.contains('hidden')) {
+      hideModal();
+    }
+  });
+
+  window.electronAPI.systemd.onServiceChanged((event) => {
+    logChange('Detected', `${event.unit} is now ${event.newState?.active || 'removed'}`, 'Detected');
+    
+    const isLive = liveUpdateServicesToggle.checked || liveUpdateChangesToggle.checked;
+    if (isLive) {
+      const serviceRow = serviceList.querySelector(`[data-service-name="${event.unit}"]`);
+      if (serviceRow) serviceRow.classList.add('flash-update');
+      
+      const index = allServicesCache.findIndex(s => s.unit === event.unit);
+      
+      if (event.type === 'removed' && index > -1) {
+        allServicesCache.splice(index, 1);
+      } else if (event.type === 'added' && index === -1) {
+        allServicesCache.push({ unit: event.unit, isUser: event.isUser, ...event.newState });
+      } else if (index > -1) {
+        allServicesCache[index] = { ...allServicesCache[index], ...event.newState };
       }
-    });
-  };
-  gameModeKeepAllBtn.addEventListener('click', () => setAllGameModeToggles(true));
-  gameModeOptimizeAllBtn.addEventListener('click', () => setAllGameModeToggles(false));
+      
+      setTimeout(refreshAndRenderServices, 200);
+    }
+  });
+
+  // Game Mode Listeners
+  gameModeActionBtn.addEventListener('click', () => {
+    if (gameModeActionBtn.dataset.action === 'activate') {
+      activateGameMode();
+    } else {
+      deactivateGameMode();
+    }
+  });
   
-  initializeApp();
+  gameModeServiceList.addEventListener('click', (e) => {
+    const target = e.target;
+    const row = target.closest('.gamemode-service-row');
+    if (!row) return;
+
+    if (target.closest('.btn-remove-gamemode')) {
+      const serviceName = row.dataset.serviceName;
+      gameModeState.servicesToStop = (gameModeState.servicesToStop || []).filter(s => s.name !== serviceName);
+      saveGameModeState();
+      populateGameModeServices();
+      logChange('Remove', `${serviceName} from Game Mode`, 'Success');
+    }
+  });
+
+  gameModeAddServiceBtn.addEventListener('click', openAddServiceModal);
+
+  // --- Initial Load ---
+  const initialize = async () => {
+    const hasSystemd = await checkSystemd();
+    if (hasSystemd) {
+      await Promise.all([
+        fetchServices(),
+        loadLogs(),
+        loadGameModeState(),
+      ]);
+      toggleWatcher(); // Start watcher based on initial toggle state
+    }
+  };
+
+  initialize();
 });
