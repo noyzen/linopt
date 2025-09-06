@@ -11,6 +11,7 @@
   --error-color: #ed4245;
   --inactive-color: #95a5a6;
   --warning-color: #faa81a;
+  --info-color: #3498db;
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
@@ -783,8 +784,7 @@ input:checked + .slider:before { transform: translateX(18px); }
 }
 
 .gamemode-service-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.8rem 1rem;
@@ -792,20 +792,47 @@ input:checked + .slider:before { transform: translateX(18px); }
 }
 .gamemode-service-row:last-child { border-bottom: none; }
 
-.btn-remove-gamemode {
+.gamemode-service-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.btn-check-online, .btn-remove-gamemode {
   background: transparent;
   border: none;
   color: var(--text-color-muted);
   cursor: pointer;
-  opacity: 1;
   transition: all 0.2s ease;
   padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 24px;
+  height: 24px;
 }
-.btn-remove-gamemode:hover {
-  color: var(--error-color);
-  transform: scale(1.1);
+.btn-check-online:hover { color: var(--info-color); }
+.btn-remove-gamemode:hover { color: var(--error-color); }
+.btn-check-online:disabled, .btn-remove-gamemode:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
-
+.btn-check-online .spinner-small {
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-left-color: var(--info-color);
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  animation: spin 0.8s linear infinite;
+}
+.btn-check-online svg {
+  transition: opacity 0.2s;
+}
+.btn-check-online.loading svg {
+  opacity: 0;
+}
 
 .gamemode-service-info {
   display: flex;
@@ -813,6 +840,7 @@ input:checked + .slider:before { transform: translateX(18px); }
   align-items: flex-start;
   gap: 4px;
   min-width: 0; /* Prevents overflow */
+  flex-grow: 1;
 }
 .gamemode-service-info .service-name-wrapper {
   display: flex;
@@ -837,6 +865,12 @@ input:checked + .slider:before { transform: translateX(18px); }
 .gamemode-service-info .service-hint {
   font-size: 0.8rem; color: var(--text-color-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.service-online-hint {
+  font-size: 0.85rem;
+  color: var(--info-color);
+  line-height: 1.4;
+  margin-top: 4px;
 }
 
 .gamemode-session-info {

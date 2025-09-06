@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onWindowMaximized: (callback) => ipcRenderer.on('window-maximized', (_event, ...args) => callback(...args)),
   onWindowUnmaximized: (callback) => ipcRenderer.on('window-unmaximized', (_event, ...args) => callback(...args)),
   saveExportedFile: (content) => ipcRenderer.invoke('app:save-export', content),
+  checkServiceSafety: (serviceName) => ipcRenderer.invoke('app:check-service-safety', serviceName),
 
   // SystemD functions
   systemd: {

@@ -498,20 +498,32 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   
   const renderGameModeUI = () => {
-    const { isOn, stoppedServices } = gameModeState;
+    const { isOn, stoppedServices, servicesToStop } = gameModeState;
+    const isListEmpty = !servicesToStop || servicesToStop.length === 0;
   
     // Update Control Panel
     gameModeStatusCard.dataset.status = isOn ? 'active' : 'inactive';
     gameModeStatusIcon.innerHTML = isOn
       ? `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`
       : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8.25c0-1.24-1.01-2.25-2.25-2.25H5.25C4.01 6 3 7.01 3 8.25v7.5C3 16.99 4.01 18 5.25 18h13.5c1.24 0 2.25-1.01 2.25-2.25v-7.5z"/><path d="M8 14v-4"/><path d="M6 12h4"/><path d="M15.5 14a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/><path d="M18.5 11a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>`;
-    gameModeStatusTitle.textContent = isOn ? 'Game Mode is Active' : 'Game Mode';
-    gameModeStatusDescription.textContent = isOn ? 'System optimized for performance.' : 'Optimize system performance.';
     
+    gameModeStatusTitle.textContent = isOn ? 'Game Mode is Active' : 'Game Mode';
+    
+    let description = 'Optimize system performance.';
+    if (!isOn && isListEmpty) {
+      description = 'Add services to the stop list before activating.';
+    } else if (isOn) {
+      description = 'System optimized for performance.';
+    }
+    gameModeStatusDescription.textContent = description;
+
     gameModeActionBtn.dataset.action = isOn ? 'deactivate' : 'activate';
     gameModeActionBtn.innerHTML = isOn
       ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg><span>Deactivate</span>`
       : `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>Activate</span>`;
+    
+    gameModeActionBtn.disabled = !isOn && isListEmpty;
+    gameModeActionBtn.title = !isOn && isListEmpty ? 'Add services to the stop list first' : '';
     
     gameModeActiveInfo.classList.toggle('hidden', !isOn);
     gameModeStoppedListContainer.classList.toggle('hidden', !isOn || !stoppedServices || stoppedServices.length === 0);
@@ -528,7 +540,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   
     gameModeMainLoader.classList.add('hidden');
-    gameModeActionBtn.disabled = false;
+    if (!gameModeMainLoader.classList.contains('hidden')) { // only re-enable if it was loading
+        gameModeActionBtn.disabled = false;
+    }
   };
   
   const populateGameModeServices = (servicesToRender) => {
@@ -549,7 +563,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = gameModeServiceRowTemplate.content.cloneNode(true);
         const rowEl = row.querySelector('.gamemode-service-row');
         const runningBadge = row.querySelector('.running-badge');
-
+        const onlineHintEl = row.querySelector('.service-online-hint');
+        const checkOnlineBtn = row.querySelector('.btn-check-online');
+        
         const liveService = allServicesCache.find(s => s.unit === service.name);
         const isRunning = liveService && liveService.active === 'active';
         
@@ -557,6 +573,12 @@ document.addEventListener('DOMContentLoaded', () => {
         row.querySelector('.service-hint').textContent = service.hint;
         runningBadge.classList.toggle('hidden', !isRunning);
         
+        if (service.onlineHint) {
+          onlineHintEl.textContent = service.onlineHint;
+          onlineHintEl.classList.remove('hidden');
+          checkOnlineBtn.classList.add('hidden');
+        }
+
         rowEl.dataset.serviceName = service.name;
         
         fragment.appendChild(row);
@@ -810,7 +832,7 @@ document.addEventListener('DOMContentLoaded', () => {
       button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
       button.title = 'Already in Game Mode list';
       
-      // Refresh game mode list to show the new service with its status
+      renderGameModeUI(); // Update main Game Mode UI (e.g. enable activate button)
       populateGameModeServices(gameModeState.servicesToStop);
 
     } else if (target.closest('.btn-start')) {
@@ -914,20 +936,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  gameModeServiceList.addEventListener('click', (e) => {
+  gameModeServiceList.addEventListener('click', async (e) => {
     const target = e.target;
     const row = target.closest('.gamemode-service-row');
     if (!row) return;
+    
+    const serviceName = row.dataset.serviceName;
 
     if (target.closest('.btn-remove-gamemode')) {
-      const serviceName = row.dataset.serviceName;
       gameModeState.servicesToStop = (gameModeState.servicesToStop || []).filter(s => s.name !== serviceName);
       saveGameModeState();
       populateGameModeServices(gameModeState.servicesToStop);
       logChange('Remove', `${serviceName} from Game Mode`, 'Success');
-      // After removing from game mode, we need to refresh the main service list
-      // if it's visible, so the 'add' button becomes active again.
+      renderGameModeUI();
       refreshAndRenderServices();
+    } else if (target.closest('.btn-check-online')) {
+      const button = target.closest('.btn-check-online');
+      button.disabled = true;
+      button.innerHTML = `<div class="spinner-small"></div>`;
+      updateStatus(`Checking ${serviceName} online...`);
+
+      try {
+        const hint = await window.electronAPI.checkServiceSafety(serviceName);
+        const serviceIndex = gameModeState.servicesToStop.findIndex(s => s.name === serviceName);
+        if (serviceIndex > -1) {
+          gameModeState.servicesToStop[serviceIndex].onlineHint = hint;
+          saveGameModeState();
+          
+          const hintEl = row.querySelector('.service-online-hint');
+          hintEl.textContent = hint;
+          hintEl.classList.remove('hidden');
+          button.classList.add('hidden');
+        }
+        updateStatus(`Successfully fetched info for ${serviceName}.`, false);
+      } catch (error) {
+        updateStatus(`Error: ${error.message}`, true);
+        button.disabled = false;
+        button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>`;
+      }
     }
   });
 
@@ -954,6 +1000,7 @@ document.addEventListener('DOMContentLoaded', () => {
           saveGameModeState();
           logChange('Game Mode', 'Reset list to defaults', 'Success');
           populateGameModeServices(gameModeState.servicesToStop);
+          renderGameModeUI();
           refreshAndRenderServices(); // Update the main service list buttons
           updateStatus('Game Mode list has been reset to defaults.', false);
         } catch (error) {
@@ -978,6 +1025,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchServices(), // This populates the cache used by game mode badges
       ]);
       // Re-render game mode list now that allServicesCache is populated
+      renderGameModeUI();
       populateGameModeServices(gameModeState.servicesToStop);
       toggleWatcher(); // Start watcher based on initial toggle state
     }

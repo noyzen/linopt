@@ -4,6 +4,8 @@ const path = require('path');
 const { exec } = require('child_process');
 const fs = require('fs').promises;
 const sudo = require('sudo-prompt');
+const dns = require('dns');
+const { GoogleGenAI } = require('@google/genai');
 
 const store = new Store();
 
@@ -217,6 +219,7 @@ function createWindow() {
   win.on('unmaximize', () => win.webContents.send('window-unmaximized'));
 }
 
+// --- App Startup ---
 app.whenReady().then(() => {
   ipcMain.handle('get-initial-maximized-state', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -242,14 +245,8 @@ app.whenReady().then(() => {
 
   // --- Game Mode IPC Handlers ---
   ipcMain.handle('gamemode:get-state', () => {
-    // Note: 'userAddedServices' is now the main list of services to stop. 'userExclusions' is removed.
     const defaultState = { isOn: false, stoppedServices: [], servicesToStop: [] };
     const savedState = store.get('gameModeState', defaultState);
-    // Migration: If old state with userExclusions exists, convert it.
-    if (savedState.userExclusions) {
-      delete savedState.userExclusions;
-      store.set('gameModeState', savedState);
-    }
     return { ...defaultState, ...savedState };
   });
   ipcMain.handle('gamemode:set-state', (_, state) => {
@@ -288,7 +285,6 @@ app.whenReady().then(() => {
 
   ipcMain.handle('systemd:check', async () => {
     try {
-      // A common way to check for systemd is to see if this directory exists.
       await fs.access('/run/systemd/system');
       return true;
     } catch (error) {
@@ -300,7 +296,7 @@ app.whenReady().then(() => {
     return internalFetchServices(includeUserServices);
   });
   
-  // --- Game Mode Service Categorization ---
+  // --- Game Mode Service Categorization & AI ---
   const SERVICE_CATEGORIES = {
     UNSAFE_TO_STOP: [
       'systemd', 'dbus', 'polkit', 'logind', 'user@',
@@ -346,31 +342,22 @@ app.whenReady().then(() => {
 
       const systemServices = JSON.parse(systemServicesJson).map(s => s.unit);
       const userServices = JSON.parse(userServicesJson).map(s => s.unit);
-      // Use Set to prevent duplicates, just in case
       const allRunningServices = [...new Set([...systemServices, ...userServices])]; 
 
       const optimizable = allRunningServices
         .filter(unit => {
-          // Exclude critical/unsafe services
           const isUnsafe = SERVICE_CATEGORIES.UNSAFE_TO_STOP.some(p => unit.includes(p));
           return !isUnsafe;
         })
         .map(name => {
-          // Provide hints based on existing categories, or a default one
           const isRecommended = SERVICE_CATEGORIES.RECOMMENDED_TO_STOP.some(p => name.includes(p));
           const isDisruptive = SERVICE_CATEGORIES.DISRUPTIVE_TO_STOP.some(p => name.includes(p));
           
           let hint = 'Generally safe to stop, review if unsure';
-          if (isRecommended) {
-            hint = 'Recommended to stop for gaming';
-          } else if (isDisruptive) {
-            hint = 'May reduce some background functionality';
-          }
+          if (isRecommended) hint = 'Recommended to stop for gaming';
+          else if (isDisruptive) hint = 'May reduce some background functionality';
           
-          return {
-            name,
-            hint,
-          };
+          return { name, hint };
         })
         .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -380,6 +367,45 @@ app.whenReady().then(() => {
       throw err;
     }
   });
+
+  ipcMain.handle('app:check-service-safety', async (_, serviceName) => {
+    // 1. Check for internet connection
+    try {
+      await new Promise((resolve, reject) => {
+        dns.lookup('google.com', (err) => {
+          if (err && err.code === 'ENOTFOUND') reject(new Error('No internet connection.'));
+          else resolve();
+        });
+      });
+    } catch (error) {
+      throw error;
+    }
+
+    // 2. Call Gemini API
+    if (!process.env.API_KEY) {
+      throw new Error('API_KEY environment variable not set.');
+    }
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `is it safe to stop ${serviceName} service while gaming on linux?`;
+      const systemInstruction = "You are an expert Linux system administrator. Your task is to determine if stopping a given SystemD service is safe for a user who wants to maximize gaming performance. Based on public web knowledge, provide a very concise, one-sentence recommendation. The recommendation should be a single, plain text sentence. Start your response with one of these four prefixes: 'Safe:', 'Likely safe:', 'Caution:', or 'Unsafe:'. For example: 'Safe: This service is for printing and not needed for gaming.' or 'Caution: Stopping this may disable Bluetooth controllers.' Do not add any extra explanations or formatting.";
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          tools: [{googleSearch: {}}],
+        },
+      });
+      
+      return response.text;
+    } catch (error) {
+      console.error(`Gemini API error for ${serviceName}:`, error);
+      throw new Error(`Failed to get safety info: ${error.message}`);
+    }
+  });
+
 
   // Reusable function to execute a command with sudo-prompt
   function runSudoCommand(command, action) {
