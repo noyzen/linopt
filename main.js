@@ -11,6 +11,9 @@ const store = new Store();
 let serviceWatcherInterval = null;
 let previousSystemServicesState = new Map();
 let previousUserServicesState = new Map();
+let isWatcherPaused = false; // Flag to pause watcher for Game Mode
+const FOCUSED_INTERVAL = 5 * 1000; // 5 seconds
+const BLURRED_INTERVAL = 30 * 1000; // 30 seconds
 
 // Helper to execute shell commands
 function runCommand(command) {
@@ -125,59 +128,78 @@ function stopServiceWatcher() {
   }
 }
 
-function startServiceWatcher(win) {
-  if (serviceWatcherInterval) {
-    console.log('Service watcher is already running.');
-    return;
-  }
-  console.log('Starting service watcher...');
-
-  initializeWatcherState().then(() => {
-    serviceWatcherInterval = setInterval(async () => {
-      if (win.isDestroyed()) {
+async function performWatcherCheck(win) {
+    if (!win || win.isDestroyed()) {
         stopServiceWatcher();
         return;
-      }
-      
-      const currentSystemMap = await getCombinedServicesState(false);
-      const currentUserMap = await getCombinedServicesState(true);
-      
-      const checkForChanges = (currentMap, previousMap, isUser) => {
-          // Check for added and changed services
-          for (const [unit, currentState] of currentMap.entries()) {
-              const prevState = previousMap.get(unit);
-              if (!prevState) {
-                  win.webContents.send('systemd:service-changed', { type: 'added', unit, isUser, newState: currentState });
-                  if (Notification.isSupported()) new Notification({ title: 'SystemD Service Added', body: unit }).show();
-              } else if (JSON.stringify(prevState) !== JSON.stringify(currentState)) {
-                  win.webContents.send('systemd:service-changed', { type: 'changed', unit, isUser, oldState: prevState, newState: currentState });
-                  
-                  let changeDetail = 'was updated';
-                  if (prevState.active !== currentState.active) changeDetail = `is now ${currentState.active}`;
-                  else if (prevState.unit_file_state !== currentState.unit_file_state) changeDetail = `is now ${currentState.unit_file_state} on boot`;
+    }
 
-                  if (Notification.isSupported()) new Notification({ title: 'SystemD Service Changed', body: `${unit} ${changeDetail}` }).show();
-              }
-          }
+    const currentSystemMap = await getCombinedServicesState(false);
+    const currentUserMap = await getCombinedServicesState(true);
+    
+    const checkForChanges = (currentMap, previousMap, isUser) => {
+        // Check for added and changed services
+        for (const [unit, currentState] of currentMap.entries()) {
+            const prevState = previousMap.get(unit);
+            if (!prevState) {
+                win.webContents.send('systemd:service-changed', { type: 'added', unit, isUser, newState: currentState });
+                if (Notification.isSupported()) new Notification({ title: 'SystemD Service Added', body: unit }).show();
+            } else if (JSON.stringify(prevState) !== JSON.stringify(currentState)) {
+                win.webContents.send('systemd:service-changed', { type: 'changed', unit, isUser, oldState: prevState, newState: currentState });
+                
+                let changeDetail = 'was updated';
+                if (prevState.active !== currentState.active) changeDetail = `is now ${currentState.active}`;
+                else if (prevState.unit_file_state !== currentState.unit_file_state) changeDetail = `is now ${currentState.unit_file_state} on boot`;
 
-          // Check for removed services
-          for (const [unit] of previousMap.entries()) {
-              if (!currentMap.has(unit)) {
-                  win.webContents.send('systemd:service-changed', { type: 'removed', unit, isUser });
-                  if (Notification.isSupported()) new Notification({ title: 'SystemD Service Removed', body: unit }).show();
-              }
-          }
-      };
-      
-      checkForChanges(currentSystemMap, previousSystemServicesState, false);
-      checkForChanges(currentUserMap, previousUserServicesState, true);
+                if (Notification.isSupported()) new Notification({ title: 'SystemD Service Changed', body: `${unit} ${changeDetail}` }).show();
+            }
+        }
 
-      previousSystemServicesState = currentSystemMap;
-      previousUserServicesState = currentUserMap;
+        // Check for removed services
+        for (const [unit] of previousMap.entries()) {
+            if (!currentMap.has(unit)) {
+                win.webContents.send('systemd:service-changed', { type: 'removed', unit, isUser });
+                if (Notification.isSupported()) new Notification({ title: 'SystemD Service Removed', body: unit }).show();
+            }
+        }
+    };
+    
+    checkForChanges(currentSystemMap, previousSystemServicesState, false);
+    checkForChanges(currentUserMap, previousUserServicesState, true);
 
-    }, 5000); // Check every 5 seconds
-  });
+    previousSystemServicesState = currentSystemMap;
+    previousUserServicesState = currentUserMap;
 }
+
+function setupAppWatcher(win) {
+    console.log('Setting up application service watcher...');
+
+    const scheduleCheck = (interval) => {
+        stopServiceWatcher();
+        if (isWatcherPaused) return; // Don't schedule if paused
+        serviceWatcherInterval = setInterval(() => performWatcherCheck(win), interval);
+        console.log(`Watcher check scheduled every ${interval / 1000}s`);
+    };
+
+    initializeWatcherState().then(() => {
+        performWatcherCheck(win); // Initial check
+        scheduleCheck(win.isFocused() ? FOCUSED_INTERVAL : BLURRED_INTERVAL);
+    });
+    
+    win.on('focus', () => {
+        if(isWatcherPaused) return;
+        console.log('Window focused. Adjusting watcher interval.');
+        performWatcherCheck(win); // Immediate check
+        scheduleCheck(FOCUSED_INTERVAL);
+    });
+
+    win.on('blur', () => {
+        if(isWatcherPaused) return;
+        console.log('Window blurred. Adjusting watcher interval.');
+        scheduleCheck(BLURRED_INTERVAL);
+    });
+}
+
 
 function createWindow() {
   const savedBounds = store.get('windowBounds', { width: 900, height: 700 });
@@ -197,6 +219,7 @@ function createWindow() {
 
   win.once('ready-to-show', () => {
     win.show();
+    setupAppWatcher(win); // Start the smart watcher once the window is ready
   });
 
   const saveBounds = () => {
@@ -225,13 +248,26 @@ app.whenReady().then(() => {
   });
 
   // --- Watcher IPC Handlers ---
-  ipcMain.on('watcher:start', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (win) startServiceWatcher(win);
+  ipcMain.on('watcher:pause', () => {
+      console.log('Pausing service watcher.');
+      isWatcherPaused = true;
+      stopServiceWatcher();
   });
-  ipcMain.on('watcher:stop', () => {
-    stopServiceWatcher();
+
+  ipcMain.on('watcher:resume', (event) => {
+      console.log('Resuming service watcher.');
+      isWatcherPaused = false;
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if(win && !win.isDestroyed()) {
+          performWatcherCheck(win); // Check immediately
+          // restart the interval logic based on current focus
+          const interval = win.isFocused() ? FOCUSED_INTERVAL : BLURRED_INTERVAL;
+          stopServiceWatcher();
+          serviceWatcherInterval = setInterval(() => performWatcherCheck(win), interval);
+          console.log(`Watcher resumed with interval: ${interval / 1000}s`);
+      }
   });
+
 
   // --- Change Log IPC Handlers ---
   ipcMain.handle('logs:get', () => {

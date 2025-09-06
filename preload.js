@@ -28,8 +28,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Watcher controls
   watcher: {
-    start: () => ipcRenderer.send('watcher:start'),
-    stop: () => ipcRenderer.send('watcher:stop'),
+    pause: () => ipcRenderer.send('watcher:pause'),
+    resume: () => ipcRenderer.send('watcher:resume'),
   },
 
   // Persistent Log functions

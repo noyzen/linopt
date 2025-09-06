@@ -20,14 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const serviceRowTemplate = document.getElementById('service-row-template');
   const loader = document.getElementById('loader');
   const systemdError = document.getElementById('systemd-error');
-  const refreshBtn = document.getElementById('refresh-btn');
   const exportBtn = document.getElementById('export-btn');
   const statusBar = document.getElementById('status-bar');
   const statusText = document.getElementById('status-text');
   const searchInput = document.getElementById('search-input');
   const serviceStatsContainer = document.getElementById('service-stats');
   const userServicesToggle = document.getElementById('user-services-toggle');
-  const liveUpdateServicesToggle = document.getElementById('live-update-services-toggle');
   const serviceFilters = document.getElementById('service-filters');
   
   // Navigation
@@ -39,8 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const changeRowTemplate = document.getElementById('change-row-template');
   const changeHeaderTemplate = document.getElementById('change-header-template');
   const clearChangesBtn = document.getElementById('clear-changes-btn');
-  const liveUpdateChangesToggle = document.getElementById('live-update-changes-toggle');
-  const refreshChangesBtn = document.getElementById('refresh-changes-btn');
   const searchChangesInput = document.getElementById('search-changes-input');
   const changeFilters = document.getElementById('change-filters');
 
@@ -619,11 +615,8 @@ document.addEventListener('DOMContentLoaded', () => {
         .map(s => s.unit);
   
       if (runningServicesToStop.length > 0) {
-        // Temporarily stop the watcher to prevent notifications for each service stop
-        window.electronAPI.watcher.stop();
-        liveUpdateServicesToggle.checked = false;
-        liveUpdateChangesToggle.checked = false;
-        toggleWatcher();
+        // Temporarily pause the watcher to prevent notifications for each service stop
+        window.electronAPI.watcher.pause();
 
         gameModeLoaderText.textContent = `Stopping ${runningServicesToStop.length} services...`;
         await window.electronAPI.systemd.stopServicesBatch(runningServicesToStop);
@@ -679,10 +672,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       updateStatus('Game Mode deactivated.', false);
 
-      // Re-enable watcher if the user wants it
-      liveUpdateServicesToggle.checked = true;
-      liveUpdateChangesToggle.checked = true;
-      toggleWatcher();
+      // Re-enable watcher
+      window.electronAPI.watcher.resume();
 
     } catch (error) {
       console.error('Failed to deactivate Game Mode:', error);
@@ -760,34 +751,6 @@ document.addEventListener('DOMContentLoaded', () => {
       refreshAndRenderServices();
     }
   });
-
-  const toggleWatcher = () => {
-    const isLive = liveUpdateServicesToggle.checked || liveUpdateChangesToggle.checked;
-    refreshBtn.classList.toggle('hidden', isLive);
-    refreshChangesBtn.classList.toggle('hidden', isLive);
-    if (isLive) {
-      window.electronAPI.watcher.start();
-    } else {
-      window.electronAPI.watcher.stop();
-    }
-  };
-
-  liveUpdateServicesToggle.addEventListener('change', () => {
-    liveUpdateChangesToggle.checked = liveUpdateServicesToggle.checked;
-    toggleWatcher();
-  });
-
-  liveUpdateChangesToggle.addEventListener('change', () => {
-    liveUpdateServicesToggle.checked = liveUpdateChangesToggle.checked;
-    toggleWatcher();
-  });
-
-  refreshBtn.addEventListener('click', async () => {
-    await fetchServices();
-    // After a manual refresh, the Game Mode list badges might be out of date
-    populateGameModeServices(getFilteredGameModeServices());
-  });
-  refreshChangesBtn.addEventListener('click', renderChanges);
 
   exportBtn.addEventListener('click', async () => {
     const servicesToExport = getFilteredServices();
@@ -926,26 +889,23 @@ document.addEventListener('DOMContentLoaded', () => {
   window.electronAPI.systemd.onServiceChanged((event) => {
     logChange('Detected', `${event.unit} is now ${event.newState?.active || 'removed'}`, 'Detected');
     
-    const isLive = liveUpdateServicesToggle.checked || liveUpdateChangesToggle.checked;
-    if (isLive) {
-      const serviceRow = serviceList.querySelector(`[data-service-name="${event.unit}"]`);
-      if (serviceRow) serviceRow.classList.add('flash-update');
-      
-      const index = allServicesCache.findIndex(s => s.unit === event.unit);
-      
-      if (event.type === 'removed' && index > -1) {
-        allServicesCache.splice(index, 1);
-      } else if (event.type === 'added' && index === -1) {
-        allServicesCache.push({ unit: event.unit, isUser: event.isUser, ...event.newState });
-      } else if (index > -1) {
-        allServicesCache[index] = { ...allServicesCache[index], ...event.newState };
-      }
-      
-      setTimeout(() => {
-        refreshAndRenderServices();
-        populateGameModeServices(getFilteredGameModeServices()); // Also update game mode badges
-      }, 200);
+    const serviceRow = serviceList.querySelector(`[data-service-name="${event.unit}"]`);
+    if (serviceRow) serviceRow.classList.add('flash-update');
+    
+    const index = allServicesCache.findIndex(s => s.unit === event.unit);
+    
+    if (event.type === 'removed' && index > -1) {
+      allServicesCache.splice(index, 1);
+    } else if (event.type === 'added' && index === -1) {
+      allServicesCache.push({ unit: event.unit, isUser: event.isUser, ...event.newState });
+    } else if (index > -1) {
+      allServicesCache[index] = { ...allServicesCache[index], ...event.newState };
     }
+    
+    setTimeout(() => {
+      refreshAndRenderServices();
+      populateGameModeServices(getFilteredGameModeServices()); // Also update game mode badges
+    }, 200);
   });
 
   // Game Mode Listeners
@@ -1055,7 +1015,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Re-render game mode list now that allServicesCache is populated
       renderGameModeUI();
       populateGameModeServices(getFilteredGameModeServices());
-      toggleWatcher(); // Start watcher based on initial toggle state
     }
   };
 
