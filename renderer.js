@@ -39,12 +39,14 @@ document.addEventListener('DOMContentLoaded', () => {
   closeBtn.addEventListener('click', () => window.electronAPI.closeWindow());
 
   const setMaximizedUI = () => {
+    document.body.classList.add('maximized');
     maxIcon.classList.add('hidden');
     restoreIcon.classList.remove('hidden');
     maximizeBtn.title = 'Restore';
   };
   
   const setUnmaximizedUI = () => {
+    document.body.classList.remove('maximized');
     restoreIcon.classList.add('hidden');
     maxIcon.classList.remove('hidden');
     maximizeBtn.title = 'Maximize';
@@ -65,18 +67,24 @@ document.addEventListener('DOMContentLoaded', () => {
     statusText.textContent = message;
     statusBar.classList.toggle('error', isError);
   };
+
+  const toggleEmptyState = (listId, show) => {
+    const emptyStateEl = document.querySelector(`.empty-state[data-empty-for="${listId}"]`);
+    if (emptyStateEl) {
+      emptyStateEl.classList.toggle('hidden', !show);
+    }
+  };
   
   const populateServiceList = (services) => {
     serviceList.innerHTML = '';
-    if (!services || services.length === 0) {
-      serviceList.innerHTML = '<p style="padding: 1.2rem; color: var(--text-color-muted);">No services found.</p>';
-      return;
-    }
+    toggleEmptyState('service-list', !services || services.length === 0);
+
+    if (!services || services.length === 0) return;
     
     // Sort services alphabetically by unit name
     services.sort((a, b) => a.unit.localeCompare(b.unit));
 
-    for (const service of services) {
+    services.forEach((service, index) => {
       const serviceRow = serviceRowTemplate.content.cloneNode(true);
       const rowElement = serviceRow.querySelector('.service-row');
       const serviceName = serviceRow.querySelector('.service-name');
@@ -90,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
       serviceName.textContent = unitName;
       serviceName.title = unitName;
       rowElement.dataset.serviceName = unitName;
+      rowElement.style.animationDelay = `${index * 20}ms`;
 
       // Set status dot color and title
       statusDot.classList.remove('active', 'failed', 'inactive');
@@ -147,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
       restartBtn.addEventListener('click', createControlHandler(window.electronAPI.systemd.restartService, 'Restart'));
 
       serviceList.appendChild(serviceRow);
-    }
+    });
   };
 
   const loadServices = async () => {
@@ -163,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateStatus(`Loaded ${services.length} services.`);
     } catch (err) {
       allServicesCache = [];
+      populateServiceList([]);
       updateStatus(`Failed to load services: ${err.message}`, true);
     } finally {
       loader.classList.add('hidden');
@@ -177,33 +187,57 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   
   // --- Change Log Logic ---
+  const getActionIcon = (action) => {
+    switch (action.toLowerCase()) {
+      case 'enable':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+      case 'disable':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+      case 'start':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+      case 'stop':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>`;
+      case 'restart':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
+      default:
+        return '';
+    }
+  };
+
   const populateChangesList = () => {
     changeList.innerHTML = '';
-    if (changesLog.length === 0) {
-      changeList.innerHTML = '<p style="padding: 1.2rem; color: var(--text-color-muted);">No changes have been logged yet.</p>';
-      return;
-    }
-    for (const log of changesLog) {
+    toggleEmptyState('change-list', changesLog.length === 0);
+
+    if (changesLog.length === 0) return;
+
+    changesLog.forEach((log, index) => {
       const changeRow = changeRowTemplate.content.cloneNode(true);
+      const rowElement = changeRow.querySelector('.change-row');
+      const infoEl = changeRow.querySelector('.change-info');
+      const iconEl = changeRow.querySelector('.change-icon');
       const actionEl = changeRow.querySelector('.change-action');
       const serviceEl = changeRow.querySelector('.change-service');
       const statusEl = changeRow.querySelector('.change-status');
       const timeEl = changeRow.querySelector('.change-time');
 
+      rowElement.style.animationDelay = `${index * 20}ms`;
+      infoEl.dataset.action = log.action;
+      iconEl.innerHTML = getActionIcon(log.action);
       actionEl.textContent = log.action;
-      actionEl.dataset.action = log.action;
       serviceEl.textContent = log.service;
       statusEl.textContent = log.status;
       statusEl.dataset.status = log.status;
       timeEl.textContent = log.timestamp.toLocaleTimeString();
       
       changeList.appendChild(changeRow);
-    }
+    });
   };
 
   const logChange = (action, service, status) => {
     changesLog.unshift({ action, service, status, timestamp: new Date() });
-    populateChangesList();
+    if(document.getElementById('changes-view').classList.contains('hidden') === false) {
+      populateChangesList();
+    }
   };
 
   const clearChanges = () => {
@@ -217,19 +251,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Snapshot Logic ---
   const populateSnapshotList = (snapshots) => {
     snapshotList.innerHTML = '';
-    if (!snapshots || snapshots.length === 0) {
-      snapshotList.innerHTML = '<p style="padding: 1.2rem; color: var(--text-color-muted); grid-column: 1 / -1;">No snapshots created yet.</p>';
-      return;
-    }
+    toggleEmptyState('snapshot-list', !snapshots || snapshots.length === 0);
 
-    for (const snapshot of snapshots) {
-      const snapshotCard = snapshotRowTemplate.content.cloneNode(true);
+    if (!snapshots || snapshots.length === 0) return;
+
+    snapshots.forEach((snapshot, index) => {
+      const snapshotCardTemplate = snapshotRowTemplate.content.cloneNode(true);
+      const snapshotCard = snapshotCardTemplate.querySelector('.snapshot-card');
       const nameEl = snapshotCard.querySelector('.snapshot-name');
       const dateEl = snapshotCard.querySelector('.snapshot-date');
       const summaryEl = snapshotCard.querySelector('.snapshot-summary');
       const restoreBtn = snapshotCard.querySelector('.btn-restore');
       const deleteBtn = snapshotCard.querySelector('.btn-delete');
       
+      snapshotCard.style.animationDelay = `${index * 30}ms`;
+
       const date = new Date(snapshot.id);
       nameEl.textContent = snapshot.name;
       dateEl.textContent = date.toLocaleDateString();
@@ -239,14 +275,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       restoreBtn.addEventListener('click', () => handleRestoreSnapshot(snapshot));
       deleteBtn.addEventListener('click', async () => {
-        if (confirm('Are you sure you want to delete this snapshot?')) {
+        if (confirm(`Are you sure you want to delete the snapshot "${snapshot.name}"? This action cannot be undone.`)) {
           await window.electronAPI.snapshots.delete(snapshot.id);
           loadSnapshots();
         }
       });
 
-      snapshotList.appendChild(snapshotCard);
-    }
+      snapshotList.appendChild(snapshotCardTemplate);
+    });
   };
 
   const loadSnapshots = async () => {
@@ -277,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     await window.electronAPI.snapshots.save(snapshot);
     updateStatus('Snapshot created successfully.', false);
-    await loadSnapshots();
+    switchView('snapshots-view');
   };
 
   const handleRestoreSnapshot = async (snapshot) => {
@@ -303,12 +339,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    const confirmationMessage = `Restoring snapshot "${snapshot.name}" will apply these changes:
+    const confirmationMessage = `This will restore the snapshot "${snapshot.name}".
     
-- Enable ${changesToApply.enable.length} service(s).
-- Disable ${changesToApply.disable.length} service(s).
-
-Are you sure you want to proceed? This will alter your system's boot configuration.`;
+The following changes will be applied to your system's boot configuration:
+  • Enable: ${changesToApply.enable.length} service(s)
+  • Disable: ${changesToApply.disable.length} service(s)
+  
+Are you sure you want to proceed?`;
 
     if (!confirm(confirmationMessage)) {
       updateStatus('Restore cancelled by user.');
@@ -318,30 +355,39 @@ Are you sure you want to proceed? This will alter your system's boot configurati
     updateStatus('Starting restore process...');
     let changesMade = 0;
     
-    for (const service of changesToApply.enable) {
-      try {
-        await window.electronAPI.systemd.enableService(service);
-        logChange('Enable', service, 'Success');
-        changesMade++;
-      } catch (err) {
-        logChange('Enable', service, 'Failed');
-        console.error(`Failed to enable ${service}:`, err);
-      }
-    }
-    for (const service of changesToApply.disable) {
-       try {
-        await window.electronAPI.systemd.disableService(service);
-        logChange('Disable', service, 'Success');
-        changesMade++;
-      } catch (err) {
-        logChange('Disable', service, 'Failed');
-        console.error(`Failed to disable ${service}:`, err);
-      }
-    }
+    const enablePromises = changesToApply.enable.map(service => 
+      window.electronAPI.systemd.enableService(service)
+        .then(() => { logChange('Enable', service, 'Success'); changesMade++; })
+        .catch(err => { logChange('Enable', service, 'Failed'); console.error(`Failed to enable ${service}:`, err); })
+    );
+
+    const disablePromises = changesToApply.disable.map(service => 
+      window.electronAPI.systemd.disableService(service)
+        .then(() => { logChange('Disable', service, 'Success'); changesMade++; })
+        .catch(err => { logChange('Disable', service, 'Failed'); console.error(`Failed to disable ${service}:`, err); })
+    );
+
+    await Promise.all([...enablePromises, ...disablePromises]);
 
     updateStatus(`Restore complete. ${changesMade} services updated. Refresh the list to see changes.`, false);
   };
+  
+  // --- View Switching ---
+  const switchView = (viewId) => {
+    navButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === viewId);
+    });
 
+    appViews.forEach(view => {
+      const isTargetView = view.id === viewId;
+      view.classList.toggle('hidden', !isTargetView);
+      if (isTargetView) {
+          // Re-populate lists if they become visible, to show any logged changes
+          if (viewId === 'snapshots-view') loadSnapshots();
+          if (viewId === 'changes-view') populateChangesList();
+      }
+    });
+  };
 
   // --- Initialization ---
   const initializeApp = async () => {
@@ -358,7 +404,10 @@ Are you sure you want to proceed? This will alter your system's boot configurati
       populateChangesList();
     } catch (err) {
       updateStatus(`Initialization error: ${err.message}`, true);
-      systemdError.querySelector('p').textContent = `An error occurred during initialization: ${err.message}`;
+      const errorEl = systemdError.querySelector('p');
+      if (errorEl) {
+          errorEl.textContent = `An error occurred during initialization: ${err.message}`;
+      }
       systemdError.classList.remove('hidden');
       loader.classList.add('hidden');
     }
@@ -372,19 +421,7 @@ Are you sure you want to proceed? This will alter your system's boot configurati
 
   navButtons.forEach(button => {
     button.addEventListener('click', () => {
-      // Toggle active class on buttons
-      navButtons.forEach(btn => btn.classList.remove('active'));
-      button.classList.add('active');
-      
-      // Show/hide views
-      const viewId = button.dataset.view;
-      appViews.forEach(view => {
-        if (view.id === viewId) {
-          view.classList.remove('hidden');
-        } else {
-          view.classList.add('hidden');
-        }
-      });
+      switchView(button.dataset.view);
     });
   });
   
