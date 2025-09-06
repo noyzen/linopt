@@ -468,30 +468,35 @@ document.addEventListener('DOMContentLoaded', () => {
       gameModeServiceList.innerHTML = '';
       toggleEmptyState('gamemode-service-list', services.length === 0);
 
+      const currentServiceNames = services.map(s => s.name);
+      // Prune stale exclusions from state to keep it clean
+      gameModeState.userExclusions = gameModeState.userExclusions.filter(exclusion => currentServiceNames.includes(exclusion));
+      saveGameModeState();
+
       services.forEach(service => {
         const row = gameModeServiceRowTemplate.content.cloneNode(true);
         const serviceNameEl = row.querySelector('.service-name');
         const serviceHintEl = row.querySelector('.service-hint');
-        const excludeToggle = row.querySelector('.exclude-toggle');
+        const keepRunningToggle = row.querySelector('.keep-running-toggle');
 
         serviceNameEl.textContent = service.name;
         serviceNameEl.title = service.name;
         serviceHintEl.textContent = service.hint;
         
-        excludeToggle.dataset.serviceName = service.name;
-        // Checked means KEEP running. So if it's NOT in the exclusion list, it should be checked.
-        excludeToggle.checked = !gameModeState.userExclusions.includes(service.name);
+        keepRunningToggle.dataset.serviceName = service.name;
+        // Checked means KEEP running. This is now intuitive.
+        keepRunningToggle.checked = gameModeState.userExclusions.includes(service.name);
 
-        excludeToggle.addEventListener('change', (e) => {
+        keepRunningToggle.addEventListener('change', (e) => {
             const serviceName = e.target.dataset.serviceName;
             if (e.target.checked) {
-                // Keep running = NOT excluded from optimization
-                gameModeState.userExclusions = gameModeState.userExclusions.filter(s => s !== serviceName);
-            } else {
-                // Don't keep running = excluded
+                // Keep running = add to user exclusions
                 if (!gameModeState.userExclusions.includes(serviceName)) {
                     gameModeState.userExclusions.push(serviceName);
                 }
+            } else {
+                // Don't keep running = remove from user exclusions
+                gameModeState.userExclusions = gameModeState.userExclusions.filter(s => s !== serviceName);
             }
             saveGameModeState();
         });
@@ -565,39 +570,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (activate) {
       gameModeLoaderText.textContent = 'Optimizing...';
-      const servicesToStop = [];
-      const userExclusions = [];
+      
+      try {
+        // Get the fresh list of currently running optimizable services
+        const optimizableServices = await window.electronAPI.systemd.getOptimizableServices();
+        const serviceNames = optimizableServices.map(s => s.name);
+        
+        // Determine which services to stop based on the user's exclusion list
+        const servicesToStop = serviceNames.filter(name => !gameModeState.userExclusions.includes(name));
 
-      // Read the current state of toggles to determine services to stop
-      gameModeServiceList.querySelectorAll('.exclude-toggle').forEach(toggle => {
-          const serviceName = toggle.dataset.serviceName;
-          if (!toggle.checked) {
-            servicesToStop.push(serviceName);
-          }
-          if (toggle.checked === false && !gameModeState.userExclusions.includes(serviceName)) {
-            userExclusions.push(serviceName);
-          }
-      });
-      gameModeState.userExclusions = userExclusions;
-      saveGameModeState();
+        if (servicesToStop.length === 0) {
+          updateStatus('No services to stop for Game Mode.', false);
+        } else {
+          updateStatus(`Activating Game Mode... Stopping ${servicesToStop.length} services.`);
+          const promises = servicesToStop.map(service => 
+            window.electronAPI.systemd.stopService(service, false)
+              .then(() => logChange('Stop', service, 'Success'))
+              .catch(err => {
+                logChange('Stop', service, 'Failed');
+                updateStatus(`Failed to stop ${service}: ${err.message}`, true);
+              })
+          );
+          await Promise.all(promises);
+        }
 
-      updateStatus(`Activating Game Mode... Stopping ${servicesToStop.length} services.`);
+        gameModeState.isOn = true;
+        gameModeState.stoppedServices = servicesToStop;
+        saveGameModeState();
+        updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
+        setLiveUpdateState(false); // Disable live updates to prevent interference
 
-      const promises = servicesToStop.map(service => 
-          window.electronAPI.systemd.stopService(service, false)
-            .then(() => logChange('Stop', service, 'Success'))
-            .catch(err => {
-              logChange('Stop', service, 'Failed');
-              console.error(`Failed to stop ${service}: ${err.message}`);
-            })
-      );
-      await Promise.all(promises);
+      } catch (err) {
+        updateStatus(`Could not activate Game Mode: ${err.message}`, true);
+      }
 
-      gameModeState.isOn = true;
-      gameModeState.stoppedServices = servicesToStop;
-      saveGameModeState();
-      updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
-      setLiveUpdateState(false);
     } else {
       // Deactivate
       gameModeLoaderText.textContent = 'Restoring...';
@@ -605,10 +611,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (servicesToRestore.length > 0) {
         updateStatus(`Deactivating Game Mode... Restoring ${servicesToRestore.length} services.`);
         const promises = servicesToRestore.map(service => 
-            window.electronAPI.systemd.startService(service, false).catch(err => {
-              logChange('Start', service, 'Failed');
-              console.error(`Failed to restart ${service}: ${err.message}`);
-            }).then(() => logChange('Start', service, 'Success'))
+            window.electronAPI.systemd.startService(service, false)
+              .then(() => logChange('Start', service, 'Success'))
+              .catch(err => {
+                logChange('Start', service, 'Failed');
+                updateStatus(`Failed to restart ${service}: ${err.message}`, true);
+            })
         );
         await Promise.all(promises);
         updateStatus(`${servicesToRestore.length} services restored.`);
@@ -830,7 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
   gameModeActionBtn.addEventListener('click', handleGameModeAction);
   
   const setAllGameModeToggles = (checked) => {
-    gameModeServiceList.querySelectorAll('.exclude-toggle').forEach(toggle => {
+    gameModeServiceList.querySelectorAll('.keep-running-toggle').forEach(toggle => {
       if (toggle.checked !== checked) {
         toggle.checked = checked;
         // Manually dispatch change event to update state

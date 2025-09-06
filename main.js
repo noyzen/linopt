@@ -356,15 +356,35 @@ app.whenReady().then(() => {
   });
 
 
-  const createServiceAction = (action, userFlagRequired = true) => {
+  const createServiceAction = (action) => {
     return async (_, { service, isUser }) => {
-      const userFlag = isUser && userFlagRequired ? '--user ' : '';
-      const command = `systemctl ${userFlag}${action} ${service}`;
+      // User services don't need pkexec and require the --user flag.
+      if (isUser) {
+        const command = `systemctl --user ${action} ${service}`;
+        try {
+          await runCommand(command);
+          return { success: true };
+        } catch (err) {
+          throw new Error(`Failed to ${action} ${service}: ${err.message}`);
+        }
+      }
+
+      // System services need pkexec for elevated privileges.
+      const command = `pkexec systemctl ${action} ${service}`;
       try {
         await runCommand(command);
         return { success: true };
       } catch (err) {
-        throw new Error(`Failed to ${action} ${service}: ${err.message}`);
+        // pkexec returns specific error codes/messages if canceled by the user.
+        // Provide a clearer, more user-friendly error message in that case.
+        const isAuthError = err.message.toLowerCase().includes('polkit') || 
+                            err.message.toLowerCase().includes('cancel') || 
+                            err.message.toLowerCase().includes('authorization');
+                            
+        const errorMessage = isAuthError
+          ? `Authorization was denied or canceled for action: ${action} ${service}.`
+          : `Failed to ${action} ${service}: ${err.message}`;
+        throw new Error(errorMessage);
       }
     };
   };
