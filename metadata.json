@@ -1,0 +1,5 @@
+{
+  "name": "Linopt",
+  "description": "A sleek GUI for managing SystemD services on Linux.",
+  "requestFramePermissions": []
+}

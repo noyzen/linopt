@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self';">
+  <title>Linopt</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="title-bar">
+    <div id="title">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px; vertical-align: -3px;"><path d="M16.5 6.38V2h-9v4.38L3 11.25V18h1.5v4h3v-4h9v4h3v-4H21v-6.75l-4.5-4.87zM12 15.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"></path></svg>
+      Linopt - SystemD Manager
+    </div>
+    <div id="title-bar-btns">
+      <button id="min-btn" title="Minimize" aria-label="Minimize">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
+      <button id="max-btn" title="Maximize" aria-label="Maximize">
+        <svg id="max-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><rect x="5" y="5" width="14" height="14" rx="1"></rect></svg>
+        <svg id="restore-icon" class="hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M10 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2 -2v-6a2 2 0 0 0 -2 -2h-6a2 2 0 0 0 -2 2v6z"></path><path d="M4 10a2 2 0 0 0 2 2h6a2 2 0 0 0 2 -2v-6a2 2 0 0 0 -2 -2h-6a2 2 0 0 0 -2 2v6z"></path></svg>
+      </button>
+      <button id="close-btn" title="Close" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>      
+    </div>
+  </div>
+  
+  <main class="container">
+    <div id="app-content">
+      <header class="app-header">
+        <h1>System Services</h1>
+        <button id="refresh-btn" aria-label="Refresh Services">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path></svg>
+          <span>Refresh</span>
+        </button>
+      </header>
+      <div id="service-list-container">
+        <div id="service-list">
+          <!-- Services will be dynamically inserted here -->
+        </div>
+        <div id="loader" class="hidden">
+          <div class="spinner"></div>
+          <p>Loading SystemD Services...</p>
+        </div>
+        <div id="systemd-error" class="hidden">
+          <h2>SystemD Not Detected</h2>
+          <p>This application requires SystemD to manage services. It appears your system is using a different init system.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer id="status-bar">
+    <span id="status-text">Ready</span>
+  </footer>
+
+  <!-- Template for a service row -->
+  <template id="service-row-template">
+    <div class="service-row" role="listitem">
+      <div class="service-info">
+        <span class="status-dot" title="Service Status"></span>
+        <span class="service-name"></span>
+      </div>
+      <div class="service-controls">
+        <label class="toggle-switch">
+          <input type="checkbox" class="enable-toggle" aria-label="Enable on Boot">
+          <span class="slider"></span>
+        </label>
+        <div class="action-buttons">
+          <button class="btn-start" title="Start Service">Start</button>
+          <button class="btn-stop" title="Stop Service">Stop</button>
+          <button class="btn-restart" title="Restart Service">Restart</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script defer src="./renderer.js"></script>
+</body>
+</html>

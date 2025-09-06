@@ -1,0 +1,46 @@
+{
+  "name": "linopt-systemd-manager",
+  "version": "1.0.0",
+  "description": "A sleek GUI for managing SystemD services on Linux.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "electron:dev": "electron .",
+    "electron:build": "electron-builder"
+  },
+  "keywords": [
+    "electron",
+    "systemd",
+    "linux",
+    "optimizer"
+  ],
+  "author": {
+    "name": "Linopt"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "electron-store": "^8.2.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.3",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.linopt.systemd-manager",
+    "productName": "Linopt",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "renderer.js",
+      "package.json",
+      "styles.css"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

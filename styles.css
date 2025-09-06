@@ -1,0 +1,328 @@
+:root {
+  --background-color: #1a1b1e;
+  --container-color: #2a2c30;
+  --text-color: #e1e1e1;
+  --text-color-muted: #8c8f94;
+  --primary-color: #3f84e5;
+  --border-color: #3a3d42;
+  --title-bar-height: 32px;
+  --success-color: #2ecc71;
+  --error-color: #e74c3c;
+  --inactive-color: #95a5a6;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  border: 1px solid var(--border-color);
+}
+
+.hidden {
+  display: none !important;
+}
+
+#title-bar {
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+  height: var(--title-bar-height);
+  background-color: #222326;
+  color: var(--text-color-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0 0 10px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.8rem;
+}
+
+#title {
+  display: flex;
+  align-items: center;
+}
+
+#title-bar-btns {
+  -webkit-app-region: no-drag;
+  display: flex;
+}
+
+#title-bar-btns button {
+  background: transparent;
+  border: 0;
+  color: var(--text-color-muted);
+  width: 40px;
+  height: var(--title-bar-height);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.2s ease-in-out;
+}
+
+#title-bar-btns button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-color);
+}
+
+#title-bar-btns button#close-btn:hover {
+  background-color: var(--error-color);
+  color: #fff;
+}
+
+#title-bar-btns button svg {
+  width: 16px;
+  height: 16px;
+}
+
+main.container {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#app-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1.5rem;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-shrink: 0;
+}
+
+h1 {
+  font-size: 1.75rem;
+}
+
+#refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: var(--container-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+#refresh-btn:hover {
+  background-color: var(--border-color);
+  border-color: #555;
+}
+
+#refresh-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+#service-list-container {
+  flex-grow: 1;
+  position: relative;
+  background-color: var(--container-color);
+  border-radius: 8px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+}
+
+#service-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.service-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1.2rem;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s;
+}
+
+.service-row:last-child {
+  border-bottom: none;
+}
+
+.service-row:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.service-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--inactive-color);
+  flex-shrink: 0;
+}
+.status-dot.active { background-color: var(--success-color); }
+.status-dot.failed, .status-dot.inactive { background-color: var(--error-color); }
+
+.service-name {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.action-buttons button {
+  background: #3c3f44;
+  border: 1px solid #555;
+  color: var(--text-color);
+  padding: 0.3rem 0.8rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.action-buttons button:hover:not(:disabled) {
+  background-color: #4a4d52;
+}
+.action-buttons button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #4a4d52;
+  transition: .4s;
+  border-radius: 22px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--primary-color);
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--primary-color);
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
+
+/* Loader and Error States */
+#loader, #systemd-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--container-color);
+  text-align: center;
+}
+
+.spinner {
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-left-color: var(--primary-color);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+#systemd-error h2 {
+  color: var(--error-color);
+  margin-bottom: 0.5rem;
+}
+#systemd-error p {
+  color: var(--text-color-muted);
+}
+
+/* Status Bar */
+#status-bar {
+  flex-shrink: 0;
+  height: 24px;
+  background-color: #222326;
+  border-top: 1px solid var(--border-color);
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-color-muted);
+}
+#status-bar.error {
+  background-color: #5c3035;
+  color: #ffc0cb;
+}
