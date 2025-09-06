@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const Store = require('electron-store');
 const path = require('path');
 const { exec } = require('child_process');
@@ -26,71 +26,95 @@ function runCommand(command) {
 }
 
 // --- Service Watcher Logic ---
+async function getCombinedServicesState(isUser) {
+    const userFlag = isUser ? '--user ' : '';
+    const listUnitsCmd = `systemctl ${userFlag}list-units --type=service --all --no-pager --plain --output=json`;
+    const listUnitFilesCmd = `systemctl ${userFlag}list-unit-files --type=service --no-pager --plain --output=json`;
+
+    try {
+        const [unitsStdout, unitFilesStdout] = await Promise.all([
+            runCommand(listUnitsCmd).catch(() => '[]'),
+            runCommand(listUnitFilesCmd).catch(() => '[]')
+        ]);
+
+        const services = JSON.parse(unitsStdout);
+        const unitFiles = JSON.parse(unitFilesStdout);
+        const unitFileStateMap = new Map(unitFiles.map(file => [file.unit_file, file.state]));
+        
+        const serviceMap = new Map();
+        services.forEach(service => {
+            serviceMap.set(service.unit, {
+                active: service.active,
+                sub: service.sub,
+                unit_file_state: unitFileStateMap.get(service.unit) || 'static'
+            });
+        });
+        return serviceMap;
+    } catch (error) {
+        // This runs frequently, so we don't want to spam logs.
+        return new Map();
+    }
+}
+
 async function initializeWatcherState() {
   try {
-    const [systemUnitsStdout, userUnitsStdout] = await Promise.all([
-      runCommand('systemctl list-units --type=service --all --no-pager --plain --output=json').catch(() => '[]'),
-      runCommand('systemctl --user list-units --type=service --all --no-pager --plain --output=json').catch(() => '[]')
+    const [systemState, userState] = await Promise.all([
+      getCombinedServicesState(false),
+      getCombinedServicesState(true)
     ]);
-
-    const systemServices = JSON.parse(systemUnitsStdout);
-    const userServices = JSON.parse(userUnitsStdout);
-
-    previousSystemServicesState = new Map(systemServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
-    previousUserServicesState = new Map(userServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
-    
-    console.log('Service watcher initialized for both system and user states.');
+    previousSystemServicesState = systemState;
+    previousUserServicesState = userState;
+    console.log('Service watcher initialized with combined unit and unit-file states.');
   } catch (error) {
     console.error('Failed to initialize service watcher state:', error.message);
   }
 }
 
 function startServiceWatcher(win) {
-  // First, get the initial state
   initializeWatcherState().then(() => {
-    // Then, start the interval watcher
     serviceWatcherInterval = setInterval(async () => {
       if (win.isDestroyed()) {
         clearInterval(serviceWatcherInterval);
         return;
       }
       
-      try {
-        const [systemUnitsStdout, userUnitsStdout] = await Promise.all([
-            runCommand('systemctl list-units --type=service --all --no-pager --plain --output=json').catch(() => '[]'),
-            runCommand('systemctl --user list-units --type=service --all --no-pager --plain --output=json').catch(() => '[]')
-        ]);
-
-        const currentSystemServices = JSON.parse(systemUnitsStdout);
-        const currentUserServices = JSON.parse(userUnitsStdout);
-        
-        const currentSystemMap = new Map(currentSystemServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
-        const currentUserMap = new Map(currentUserServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
-        
-        const checkForChanges = (currentMap, previousMap, isUser) => {
+      const currentSystemMap = await getCombinedServicesState(false);
+      const currentUserMap = await getCombinedServicesState(true);
+      
+      const checkForChanges = (currentMap, previousMap, isUser) => {
+          // Check for added and changed services
           for (const [unit, currentState] of currentMap.entries()) {
-            const prevState = previousMap.get(unit);
-            if (prevState && (prevState.active !== currentState.active || prevState.sub !== currentState.sub)) {
-              win.webContents.send('systemd:service-changed', {
-                unit,
-                oldState: prevState,
-                newState: currentState,
-                isUser,
-              });
-            }
+              const prevState = previousMap.get(unit);
+              if (!prevState) {
+                  win.webContents.send('systemd:service-changed', { type: 'added', unit, isUser, newState: currentState });
+                  if (Notification.isSupported()) new Notification({ title: 'SystemD Service Added', body: unit }).show();
+              } else if (JSON.stringify(prevState) !== JSON.stringify(currentState)) {
+                  win.webContents.send('systemd:service-changed', { type: 'changed', unit, isUser, oldState: prevState, newState: currentState });
+                  
+                  let changeDetail = 'was updated';
+                  if (prevState.active !== currentState.active) changeDetail = `is now ${currentState.active}`;
+                  else if (prevState.unit_file_state !== currentState.unit_file_state) changeDetail = `is now ${currentState.unit_file_state} on boot`;
+
+                  if (Notification.isSupported()) new Notification({ title: 'SystemD Service Changed', body: `${unit} ${changeDetail}` }).show();
+              }
           }
-        };
-        
-        checkForChanges(currentSystemMap, previousSystemServicesState, false);
-        checkForChanges(currentUserMap, previousUserServicesState, true);
 
-        previousSystemServicesState = currentSystemMap;
-        previousUserServicesState = currentUserMap;
+          // Check for removed services
+          for (const [unit] of previousMap.entries()) {
+              if (!currentMap.has(unit)) {
+                  win.webContents.send('systemd:service-changed', { type: 'removed', unit, isUser });
+                  if (Notification.isSupported()) new Notification({ title: 'SystemD Service Removed', body: unit }).show();
+              }
+          }
+      };
+      
+      checkForChanges(currentSystemMap, previousSystemServicesState, false);
+      checkForChanges(currentUserMap, previousUserServicesState, true);
 
-      } catch (error) {
-        // Don't spam logs for transient errors
-      }
-    }, 3000); // Check every 3 seconds
+      previousSystemServicesState = currentSystemMap;
+      previousUserServicesState = currentUserMap;
+
+    }, 5000); // Check every 5 seconds
   });
 }
 

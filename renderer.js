@@ -222,6 +222,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Change Log Logic ---
   const getActionIcon = (action) => {
     switch (action.toLowerCase()) {
+      case 'add':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>`;
+      case 'remove':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>`;
       case 'enable':
         return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
       case 'disable':
@@ -257,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const timeEl = changeRow.querySelector('.change-time');
 
       infoEl.dataset.action = log.action;
-      iconEl.innerHTML = getActionIcon(log.status === 'Detected' ? log.action : log.action);
+      iconEl.innerHTML = getActionIcon(log.action);
       actionEl.textContent = log.action;
       serviceEl.textContent = log.service;
       statusEl.textContent = log.status;
@@ -305,24 +309,33 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // --- Real-time Change Detection ---
-  const interpretServiceChange = ({ unit, oldState, newState }) => {
-      let action = null;
-      // Started: Any non-active state -> 'active' state
-      if (oldState.active !== 'active' && newState.active === 'active') {
-          action = 'Start';
-      } 
-      // Stopped: 'active' state -> 'inactive' state (graceful stop)
-      else if (oldState.active === 'active' && newState.active === 'inactive') {
-          action = 'Stop';
-      }
-      // Failed: Any state -> 'failed' state
-      else if (newState.active === 'failed' && oldState.active !== 'failed') {
-         action = 'Failed';
-      }
-      
-      if (action) {
-          logChange(action, unit, 'Detected');
-      }
+  const handleServiceEvent = (data) => {
+    const { type, unit, oldState, newState } = data;
+
+    switch (type) {
+        case 'added':
+            logChange('Add', unit, 'Detected');
+            break;
+        case 'removed':
+            logChange('Remove', unit, 'Detected');
+            break;
+        case 'changed':
+            // Prioritize logging the most significant change to avoid multiple logs for one event
+            if (newState.active === 'failed' && oldState.active !== 'failed') {
+                logChange('Failed', unit, 'Detected');
+            } else if (oldState.active !== 'active' && newState.active === 'active') {
+                logChange('Start', unit, 'Detected');
+            } else if (oldState.active === 'active' && newState.active !== 'active') {
+                logChange('Stop', unit, 'Detected');
+            } else if (oldState.unit_file_state !== newState.unit_file_state) {
+                if (newState.unit_file_state === 'enabled') {
+                    logChange('Enable', unit, 'Detected');
+                } else if (newState.unit_file_state === 'disabled') {
+                    logChange('Disable', unit, 'Detected');
+                }
+            }
+            break;
+    }
   };
 
   // --- Modal Dialog Logic ---
@@ -379,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
       populateChangesList();
       
       // Start listening for real-time changes from the main process
-      window.electronAPI.systemd.onServiceChanged(interpretServiceChange);
+      window.electronAPI.systemd.onServiceChanged(handleServiceEvent);
 
     } catch (err) {
       updateStatus(`Initialization error: ${err.message}`, true);

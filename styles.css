@@ -306,12 +306,14 @@ input:checked + .slider:before { transform: translateX(18px); }
 
 /* Set color on the container, which is inherited by the icon (via currentColor) and action text */
 .change-info[data-action="Enable"],
-.change-info[data-action="Start"] {
+.change-info[data-action="Start"],
+.change-info[data-action="Add"] {
   color: var(--success-color);
 }
 .change-info[data-action="Disable"],
 .change-info[data-action="Stop"],
-.change-info[data-action="Failed"] {
+.change-info[data-action="Failed"],
+.change-info[data-action="Remove"] {
   color: var(--error-color);
 }
 .change-info[data-action="Restart"] {
