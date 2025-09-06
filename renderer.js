@@ -975,7 +975,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderGameModeUI();
       refreshAndRenderServices();
     } else if (target.closest('.btn-check-online')) {
-      const query = `is it safe to stop "${serviceName}" service while gaming on linux?`;
+      const query = `what is ${serviceName} service on linux?`;
       const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
       window.electronAPI.openExternalLink(url);
     } else if (target.closest('.service-user-hint')) {

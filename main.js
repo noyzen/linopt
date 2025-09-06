@@ -348,9 +348,9 @@ app.whenReady().then(() => {
 
       // --- Desktop Environments & Window Managers ---
       // GNOME
-      'gnome-session', 'gnome-shell', 'gsd-', 'gnome-keyring',
+      'gnome-', 'gsd-', // 'gnome-' is a broad catch-all, 'gsd-' for settings daemons
       // KDE Plasma
-      'plasma-workspace', 'plasmashell', 'kwin', 'kded', 'ksmserver', 'kdewallet',
+      'plasma-', 'kwin', 'kded', 'ksmserver', 'kdewallet', 'kde', // 'plasma-' and 'kde' are broad catch-alls
       // XFCE
       'xfce4-session', 'xfdesktop', 'xfwm4',
       // Cinnamon
