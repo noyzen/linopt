@@ -33,9 +33,9 @@
       "main.js",
       "preload.js",
       "index.html",
-      "renderer.js",
       "package.json",
-      "styles.css"
+      "renderer/",
+      "styles/"
     ],
     "win": {
       "target": "nsis"
