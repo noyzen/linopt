@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const serviceStatsContainer = document.getElementById('service-stats');
   const userServicesToggle = document.getElementById('user-services-toggle');
   const liveUpdateServicesToggle = document.getElementById('live-update-services-toggle');
+  const serviceFilters = document.getElementById('service-filters');
   
   // Navigation
   const navButtons = document.querySelectorAll('.nav-btn');
@@ -197,24 +198,45 @@ document.addEventListener('DOMContentLoaded', () => {
   const getFilteredServices = () => {
     const searchTerm = searchInput.value.toLowerCase();
     const showUserServices = userServicesToggle.checked;
+    const activeFilter = serviceFilters.querySelector('[aria-pressed="true"]').dataset.filter;
 
-    if (!searchTerm && showUserServices) {
-      return allServicesCache;
-    }
-    
     return allServicesCache.filter(service => {
       const matchesSearch = service.unit.toLowerCase().includes(searchTerm);
       const matchesUserFilter = showUserServices || !service.isUser;
-      return matchesSearch && matchesUserFilter;
+
+      let matchesStateFilter = false;
+      switch (activeFilter) {
+        case 'running':
+          matchesStateFilter = service.active === 'active';
+          break;
+        case 'stopped':
+          matchesStateFilter = service.active !== 'active';
+          break;
+        case 'enabled':
+          matchesStateFilter = service.unit_file_state === 'enabled';
+          break;
+        case 'disabled':
+          matchesStateFilter = service.unit_file_state === 'disabled';
+          break;
+        case 'all':
+        default:
+          matchesStateFilter = true;
+          break;
+      }
+
+      return matchesSearch && matchesUserFilter && matchesStateFilter;
     });
   };
 
   const refreshAndRenderServices = () => {
     const filteredServices = getFilteredServices();
     renderServices(filteredServices);
-    // Only update stats based on the currently filtered view if a search term is present.
+    // Only update stats based on the currently filtered view if a search term is present or filter active.
     // Otherwise, show stats for all loaded services.
-    const statsSource = searchInput.value ? filteredServices : allServicesCache.filter(s => userServicesToggle.checked || !s.isUser);
+    const activeFilter = serviceFilters.querySelector('[aria-pressed="true"]').dataset.filter;
+    const statsSource = (searchInput.value || activeFilter !== 'all') 
+      ? filteredServices 
+      : allServicesCache.filter(s => userServicesToggle.checked || !s.isUser);
     updateServiceStats(statsSource);
   };
   
@@ -657,6 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
       });
 
+      modalListContainer.innerHTML = listHtml; // Add search bar to DOM
       modalListContainer.appendChild(fragment);
 
       // Add live search functionality to the modal
@@ -701,6 +724,15 @@ document.addEventListener('DOMContentLoaded', () => {
   searchInput.addEventListener('input', refreshAndRenderServices);
   searchChangesInput.addEventListener('input', renderChanges);
   userServicesToggle.addEventListener('change', refreshAndRenderServices);
+
+  serviceFilters.addEventListener('click', (e) => {
+    const target = e.target.closest('.filter-btn');
+    if (target) {
+      serviceFilters.querySelectorAll('.filter-btn').forEach(btn => btn.setAttribute('aria-pressed', 'false'));
+      target.setAttribute('aria-pressed', 'true');
+      refreshAndRenderServices();
+    }
+  });
 
   const toggleWatcher = () => {
     const isLive = liveUpdateServicesToggle.checked || liveUpdateChangesToggle.checked;

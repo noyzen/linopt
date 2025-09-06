@@ -341,12 +341,22 @@ app.whenReady().then(() => {
       const runningServices = JSON.parse(servicesJson).map(s => s.unit);
 
       const optimizable = runningServices
-        .filter(unit => SERVICE_CATEGORIES.RECOMMENDED_TO_STOP.some(pattern => unit.includes(pattern)))
-        .map(name => ({
-          name,
-          hint: 'Recommended to stop for gaming',
-        }))
-        .sort((a,b) => a.name.localeCompare(b.name));
+        .filter(unit => {
+          const isUnsafe = SERVICE_CATEGORIES.UNSAFE_TO_STOP.some(p => unit.includes(p));
+          if (isUnsafe) return false;
+          
+          const isRecommended = SERVICE_CATEGORIES.RECOMMENDED_TO_STOP.some(p => unit.includes(p));
+          const isDisruptive = SERVICE_CATEGORIES.DISRUPTIVE_TO_STOP.some(p => unit.includes(p));
+          return isRecommended || isDisruptive;
+        })
+        .map(name => {
+          const isRecommended = SERVICE_CATEGORIES.RECOMMENDED_TO_STOP.some(p => name.includes(p));
+          return {
+            name,
+            hint: isRecommended ? 'Recommended to stop for gaming' : 'May reduce some functionality',
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
 
       return optimizable;
     } catch (err) {
