@@ -652,6 +652,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  // --- Filter Dropdown Logic ---
+  const setupFilterDropdown = (container) => {
+    const toggle = container.querySelector('.filter-dropdown-toggle');
+    const menu = container.querySelector('.filter-dropdown-menu');
+    const label = container.querySelector('.filter-dropdown-label');
+    const filterButtons = container.querySelectorAll('.filter-btn');
+
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+      // Close all other menus first
+      document.querySelectorAll('.filter-dropdown-toggle').forEach(t => {
+        if (t !== toggle) {
+          t.setAttribute('aria-expanded', 'false');
+          t.nextElementSibling.classList.add('hidden');
+        }
+      });
+      // Toggle current menu
+      toggle.setAttribute('aria-expanded', !isExpanded);
+      menu.classList.toggle('hidden');
+    });
+
+    filterButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        // Update label
+        label.textContent = button.textContent;
+        // Close menu
+        toggle.setAttribute('aria-expanded', 'false');
+        menu.classList.add('hidden');
+      });
+    });
+  };
+
+
   // --- Event Listeners ---
   
   navButtons.forEach(button => {
@@ -832,6 +866,14 @@ document.addEventListener('DOMContentLoaded', () => {
       hideModal();
     }
   });
+  
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.filter-dropdown-toggle[aria-expanded="true"]').forEach(toggle => {
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.nextElementSibling.classList.add('hidden');
+    });
+  });
+  
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !confirmationDialog.classList.contains('hidden')) {
       hideModal();
@@ -929,6 +971,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const initialize = async () => {
     const hasSystemd = await checkSystemd();
     if (hasSystemd) {
+      document.querySelectorAll('.filter-dropdown').forEach(setupFilterDropdown);
       await Promise.all([
         loadLogs(),
         loadGameModeState(), // Load this first to have the list ready

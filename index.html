@@ -43,12 +43,19 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input type="search" id="search-input" placeholder="Filter services...">
           </div>
-          <div id="service-filters" class="change-filters">
-            <button class="filter-btn" data-filter="all" aria-pressed="true">All</button>
-            <button class="filter-btn" data-filter="running" aria-pressed="false">Running</button>
-            <button class="filter-btn" data-filter="stopped" aria-pressed="false">Stopped</button>
-            <button class="filter-btn" data-filter="enabled" aria-pressed="false">Enabled</button>
-            <button class="filter-btn" data-filter="disabled" aria-pressed="false">Disabled</button>
+          <div id="service-filters" class="filter-dropdown">
+            <button class="filter-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              <span class="filter-dropdown-label">All</span>
+              <svg class="dropdown-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="filter-dropdown-menu hidden">
+              <button class="filter-btn" data-filter="all" aria-pressed="true">All</button>
+              <button class="filter-btn" data-filter="running" aria-pressed="false">Running</button>
+              <button class="filter-btn" data-filter="stopped" aria-pressed="false">Stopped</button>
+              <button class="filter-btn" data-filter="enabled" aria-pressed="false">Enabled</button>
+              <button class="filter-btn" data-filter="disabled" aria-pressed="false">Disabled</button>
+            </div>
           </div>
           <div class="toggle-container header-toggle">
             <label class="toggle-switch">
@@ -110,17 +117,24 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input type="search" id="search-changes-input" placeholder="Filter changes...">
           </div>
-           <div id="change-filters" class="change-filters">
-            <button class="filter-btn" data-filter="all" aria-pressed="true">All</button>
-            <button class="filter-btn" data-filter="Add" aria-pressed="false">Add</button>
-            <button class="filter-btn" data-filter="Remove" aria-pressed="false">Remove</button>
-            <button class="filter-btn" data-filter="Start" aria-pressed="false">Start</button>
-            <button class="filter-btn" data-filter="Stop" aria-pressed="false">Stop</button>
-            <button class="filter-btn" data-filter="Enable" aria-pressed="false">Enable</button>
-            <button class="filter-btn" data-filter="Disable" aria-pressed="false">Disable</button>
-            <button class="filter-btn" data-filter="Game Mode" aria-pressed="false">Game Mode</button>
-            <button class="filter-btn" data-filter="Success" aria-pressed="false">Success</button>
-            <button class="filter-btn" data-filter="Failed" aria-pressed="false">Failed</button>
+           <div id="change-filters" class="filter-dropdown">
+            <button class="filter-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              <span class="filter-dropdown-label">All</span>
+              <svg class="dropdown-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="filter-dropdown-menu hidden">
+              <button class="filter-btn" data-filter="all" aria-pressed="true">All</button>
+              <button class="filter-btn" data-filter="Add" aria-pressed="false">Add</button>
+              <button class="filter-btn" data-filter="Remove" aria-pressed="false">Remove</button>
+              <button class="filter-btn" data-filter="Start" aria-pressed="false">Start</button>
+              <button class="filter-btn" data-filter="Stop" aria-pressed="false">Stop</button>
+              <button class="filter-btn" data-filter="Enable" aria-pressed="false">Enable</button>
+              <button class="filter-btn" data-filter="Disable" aria-pressed="false">Disable</button>
+              <button class="filter-btn" data-filter="Game Mode" aria-pressed="false">Game Mode</button>
+              <button class="filter-btn" data-filter="Success" aria-pressed="false">Success</button>
+              <button class="filter-btn" data-filter="Failed" aria-pressed="false">Failed</button>
+            </div>
           </div>
         </div>
         <div class="header-controls-right">
@@ -203,7 +217,7 @@
                 </button>
               </div>
             </div>
-            <p class="panel-description">The following services will be stopped when Game Mode is activated. Add services from the main list, and remove any you wish to keep running.</p>
+            <p class="panel-description">The following services will be stopped when Game Mode is activated. Add services from the main list, and remove any you wish to keep running.<br><br>If anything goes wrong by enabling Game Mode, just restart your PC and you will be fine.</p>
             <div class="search-container">
               <input type="search" id="gamemode-search-input" placeholder="Filter services in list...">
             </div>
