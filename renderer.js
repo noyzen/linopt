@@ -569,6 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
       saveGameModeState();
       updateGameModeUI();
       updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
+      setLiveUpdateState(false);
   };
 
 
@@ -684,9 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // --- Live Update Toggle Logic ---
-  const handleLiveUpdateToggle = (event) => {
-    const isEnabled = event.target.checked;
-    
+  const setLiveUpdateState = (isEnabled) => {
     // Sync both toggles
     liveUpdateServicesToggle.checked = isEnabled;
     liveUpdateChangesToggle.checked = isEnabled;
@@ -705,6 +704,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const handleLiveUpdateToggle = (event) => {
+    setLiveUpdateState(event.target.checked);
+  };
+
   // --- Initialization ---
   const initializeApp = async () => {
     // Modal Listeners
@@ -714,6 +717,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       hideConfirmationDialog();
     });
+
+    setLiveUpdateState(false); // Set default state to OFF.
 
     await loadPersistentLogs();
     gameModeState = await window.electronAPI.gamemode.getState();

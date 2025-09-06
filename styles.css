@@ -479,12 +479,12 @@ input:checked + .slider:before { transform: translateX(18px); }
   background-color: #4f545c;
   border-radius: 50%;
   transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: grid;
+  place-items: center;
   color: var(--text-color);
 }
 .gamemode-toggle-handle svg {
+  grid-area: 1 / 1;
   transition: opacity 0.2s ease;
 }
 .gamemode-icon-on { opacity: 0; }

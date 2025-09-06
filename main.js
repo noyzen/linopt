@@ -150,8 +150,6 @@ function createWindow() {
 
   win.once('ready-to-show', () => {
     win.show();
-    // Start the service watcher after the window is visible
-    startServiceWatcher(win);
   });
 
   const saveBounds = () => {
