@@ -356,9 +356,33 @@ app.whenReady().then(() => {
     }
   });
 
+  // Reusable function to execute a command with sudo-prompt
+  function runSudoCommand(command, action) {
+    const sudoOptions = {
+      name: 'Linopt', // This name is shown in the password prompt
+    };
+    return new Promise((resolve, reject) => {
+      sudo.exec(command, sudoOptions, (error, stdout, stderr) => {
+        if (error) {
+          const userCancelled = error.message && (
+            error.message.toLowerCase().includes('did not grant permission') || 
+            error.message.toLowerCase().includes('authentication canceled')
+          );
+          
+          const errorMessage = userCancelled
+            ? `Authorization was canceled for action: ${action}.`
+            : `Failed to ${action}: ${stderr || error.message}`;
+          
+          reject(new Error(errorMessage));
+          return;
+        }
+        resolve({ success: true });
+      });
+    });
+  }
+
   const createServiceAction = (action) => {
     return (_, { service, isUser }) => {
-      // User services don't need sudo and require the --user flag.
       if (isUser) {
         const command = `systemctl --user ${action} ${service}`;
         return runCommand(command)
@@ -367,32 +391,19 @@ app.whenReady().then(() => {
             throw new Error(`Failed to ${action} ${service}: ${err.message}`);
           });
       }
-
-      // System services need elevated privileges. Use sudo-prompt.
       const command = `systemctl ${action} ${service}`;
-      const sudoOptions = {
-        name: 'Linopt', // This name is shown in the password prompt
-      };
+      return runSudoCommand(command, `${action} ${service}`);
+    };
+  };
 
-      return new Promise((resolve, reject) => {
-        sudo.exec(command, sudoOptions, (error, stdout, stderr) => {
-          if (error) {
-            // Check for specific cancellation messages from sudo-prompt
-            const userCancelled = error.message && (
-              error.message.toLowerCase().includes('did not grant permission') || 
-              error.message.toLowerCase().includes('authentication canceled')
-            );
-            
-            const errorMessage = userCancelled
-              ? `Authorization was canceled for action: ${action} ${service}.`
-              : `Failed to ${action} ${service}: ${stderr || error.message}`;
-            
-            reject(new Error(errorMessage));
-            return;
-          }
-          resolve({ success: true });
-        });
-      });
+  const createBatchServiceAction = (action) => {
+    return async (_, services) => {
+      if (!services || services.length === 0) {
+        return { success: true }; // Nothing to do
+      }
+      // System services only, as user services don't need sudo.
+      const command = `systemctl ${action} ${services.join(' ')}`;
+      return runSudoCommand(command, `${action} ${services.length} services`);
     };
   };
 
@@ -401,6 +412,10 @@ app.whenReady().then(() => {
   ipcMain.handle('systemd:start-service', createServiceAction('start'));
   ipcMain.handle('systemd:stop-service', createServiceAction('stop'));
   ipcMain.handle('systemd:restart-service', createServiceAction('restart'));
+  
+  // Batch actions for Game Mode
+  ipcMain.handle('systemd:start-services-batch', createBatchServiceAction('start'));
+  ipcMain.handle('systemd:stop-services-batch', createBatchServiceAction('stop'));
   
   createWindow();
 

@@ -571,56 +571,48 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activate) {
       gameModeLoaderText.textContent = 'Optimizing...';
       
-      try {
-        // Get the fresh list of currently running optimizable services
-        const optimizableServices = await window.electronAPI.systemd.getOptimizableServices();
-        const serviceNames = optimizableServices.map(s => s.name);
-        
-        // Determine which services to stop based on the user's exclusion list
-        const servicesToStop = serviceNames.filter(name => !gameModeState.userExclusions.includes(name));
+      // Get the fresh list of currently running optimizable services
+      const optimizableServices = await window.electronAPI.systemd.getOptimizableServices();
+      const serviceNames = optimizableServices.map(s => s.name);
+      
+      // Determine which services to stop based on the user's exclusion list
+      const servicesToStop = serviceNames.filter(name => !gameModeState.userExclusions.includes(name));
 
-        if (servicesToStop.length === 0) {
-          updateStatus('No services to stop for Game Mode.', false);
-        } else {
-          updateStatus(`Activating Game Mode... Stopping ${servicesToStop.length} services.`);
-          const promises = servicesToStop.map(service => 
-            window.electronAPI.systemd.stopService(service, false)
-              .then(() => logChange('Stop', service, 'Success'))
-              .catch(err => {
-                logChange('Stop', service, 'Failed');
-                updateStatus(`Failed to stop ${service}: ${err.message}`, true);
-              })
-          );
-          await Promise.all(promises);
+      if (servicesToStop.length === 0) {
+        updateStatus('No services to stop for Game Mode.', false);
+      } else {
+        updateStatus(`Activating Game Mode... Stopping ${servicesToStop.length} services.`);
+        try {
+          await window.electronAPI.systemd.stopServicesBatch(servicesToStop);
+          servicesToStop.forEach(service => logChange('Stop', service, 'Success'));
+          updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
+          
+          gameModeState.isOn = true;
+          gameModeState.stoppedServices = servicesToStop;
+          saveGameModeState();
+          setLiveUpdateState(false); // Disable live updates to prevent interference
+        } catch (err) {
+          servicesToStop.forEach(service => logChange('Stop', service, 'Failed'));
+          updateStatus(`Could not activate Game Mode: ${err.message}`, true);
         }
-
-        gameModeState.isOn = true;
-        gameModeState.stoppedServices = servicesToStop;
-        saveGameModeState();
-        updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
-        setLiveUpdateState(false); // Disable live updates to prevent interference
-
-      } catch (err) {
-        updateStatus(`Could not activate Game Mode: ${err.message}`, true);
       }
 
-    } else {
-      // Deactivate
+    } else { // Deactivate
       gameModeLoaderText.textContent = 'Restoring...';
       const servicesToRestore = gameModeState.stoppedServices;
+
       if (servicesToRestore.length > 0) {
         updateStatus(`Deactivating Game Mode... Restoring ${servicesToRestore.length} services.`);
-        const promises = servicesToRestore.map(service => 
-            window.electronAPI.systemd.startService(service, false)
-              .then(() => logChange('Start', service, 'Success'))
-              .catch(err => {
-                logChange('Start', service, 'Failed');
-                updateStatus(`Failed to restart ${service}: ${err.message}`, true);
-            })
-        );
-        await Promise.all(promises);
-        updateStatus(`${servicesToRestore.length} services restored.`);
+        try {
+          await window.electronAPI.systemd.startServicesBatch(servicesToRestore);
+          servicesToRestore.forEach(service => logChange('Start', service, 'Success'));
+          updateStatus(`${servicesToRestore.length} services restored.`);
+        } catch (err) {
+          servicesToRestore.forEach(service => logChange('Start', service, 'Failed'));
+          updateStatus(`Failed to restore services: ${err.message}`, true);
+        }
       }
+      
       gameModeState.isOn = false;
       gameModeState.stoppedServices = [];
       saveGameModeState();
