@@ -504,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
     gameModeStatusCard.dataset.status = isOn ? 'active' : 'inactive';
     gameModeStatusIcon.innerHTML = isOn
       ? `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`
-      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8.5h.01M19.5 11.5h.01M2 13h2c.6 0 1 .4 1 1v2c0 .6-.4 1-1 1H2v-4Z"/><path d="M5 15v-2c0-.6.4-1 1-1h2"/><path d="m14 12-2-2-2 2 2 2 2-2Z"/><path d="M22 13v-2c0-.6-.4-1-1-1h-2c-.6 0-1 .4-1 1v2c0 .6.4 1 1 1h2c.6 0 1-.4 1-1Z"/><path d="M6 6.2c1.5 1.8 3.5 3 6 3s4.5-1.2 6-3"/><path d="M6 17.8c1.5-1.8 3.5-3 6-3s4.5 1.2 6 3"/></svg>`;
+      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8.5h.01M19.5 11.5h.01M2 13h2c.6 0 1 .4 1 1v2c0 .6-.4 1-1 1H2v-4Z"/><path d="M5 15v-2c0-.6.4-1 1-1h2"/><path d="m14 12-2-2-2 2 2 2 2-2Z"/><path d="M22 13v-2c0-.6-.4-1-1-1h-2c-.6 0-1 .4-1 1v2c0 .6.4 1 1 1h2c.6 0 1-.4 1-1Z"/><path d="M6 6.2c1.5 1.8 3.5 3 6 3s4.5-1.2 6-3"/><path d="M6 17.8c1.5-1.8 3.5-3 6-3s4.5 1.2 6 3"/></svg>`;
     gameModeStatusTitle.textContent = isOn ? 'Game Mode is Active' : 'Game Mode';
     gameModeStatusDescription.textContent = isOn ? 'System optimized for performance.' : 'Optimize system performance.';
     
@@ -541,16 +541,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const searchTerm = gameModeSearchInput.value;
       const message = searchTerm 
         ? "Your search returned no results." 
-        : "No running, non-essential services were found. You can add services to the list from the main Services page.";
+        : "No services are in the stop list. Add services from the main Services page.";
       toggleEmptyState('gamemode-service-list', true, message);
     } else {
       toggleEmptyState('gamemode-service-list', false);
       services.forEach(service => {
         const row = gameModeServiceRowTemplate.content.cloneNode(true);
         const rowEl = row.querySelector('.gamemode-service-row');
+        const runningBadge = row.querySelector('.running-badge');
+
+        const liveService = allServicesCache.find(s => s.unit === service.name);
+        const isRunning = liveService && liveService.active === 'active';
         
         row.querySelector('.service-name').textContent = service.name;
         row.querySelector('.service-hint').textContent = service.hint;
+        runningBadge.classList.toggle('hidden', !isRunning);
+        
         rowEl.dataset.serviceName = service.name;
         
         fragment.appendChild(row);
@@ -565,27 +571,33 @@ document.addEventListener('DOMContentLoaded', () => {
     gameModeLoaderText.textContent = 'Analyzing services...';
   
     try {
-      const servicesToStop = (gameModeState.servicesToStop || []).map(s => s.name);
+      const serviceNamesToStop = (gameModeState.servicesToStop || []).map(s => s.name);
+      
+      const runningServicesToStop = allServicesCache
+        .filter(s => serviceNamesToStop.includes(s.unit) && s.active === 'active')
+        .map(s => s.unit);
   
-      if (servicesToStop.length > 0) {
+      if (runningServicesToStop.length > 0) {
         // Temporarily stop the watcher to prevent notifications for each service stop
         window.electronAPI.watcher.stop();
         liveUpdateServicesToggle.checked = false;
         liveUpdateChangesToggle.checked = false;
         toggleWatcher();
 
-        gameModeLoaderText.textContent = `Stopping ${servicesToStop.length} services...`;
-        await window.electronAPI.systemd.stopServicesBatch(servicesToStop);
-        gameModeState.stoppedServices = servicesToStop;
-        logChange('Game Mode', `Stopped ${servicesToStop.length} services`, 'Success');
+        gameModeLoaderText.textContent = `Stopping ${runningServicesToStop.length} services...`;
+        await window.electronAPI.systemd.stopServicesBatch(runningServicesToStop);
+        gameModeState.stoppedServices = runningServicesToStop;
+        logChange('Game Mode', `Stopped ${runningServicesToStop.length} services`, 'Success');
       } else {
         gameModeState.stoppedServices = [];
-        logChange('Game Mode', `No services needed to be stopped`, 'Success');
+        logChange('Game Mode', `No running services to stop`, 'Success');
       }
   
       gameModeState.isOn = true;
       saveGameModeState();
+      await fetchServices(); // Refresh service state after stopping
       renderGameModeUI();
+      populateGameModeServices(gameModeState.servicesToStop);
       updateStatus('Game Mode activated.', false);
   
     } catch (error) {
@@ -603,10 +615,15 @@ document.addEventListener('DOMContentLoaded', () => {
     gameModeLoaderText.textContent = 'Restoring services...';
     
     try {
-      const servicesToStart = gameModeState.stoppedServices;
-      if (servicesToStart && servicesToStart.length > 0) {
-        await window.electronAPI.systemd.startServicesBatch(servicesToStart);
-        logChange('Game Mode', `Restored ${servicesToStart.length} services`, 'Success');
+      const servicesToPotentiallyStart = gameModeState.stoppedServices || [];
+      
+      const servicesToActuallyStart = allServicesCache
+        .filter(s => servicesToPotentiallyStart.includes(s.unit) && s.active !== 'active')
+        .map(s => s.unit);
+
+      if (servicesToActuallyStart.length > 0) {
+        await window.electronAPI.systemd.startServicesBatch(servicesToActuallyStart);
+        logChange('Game Mode', `Restored ${servicesToActuallyStart.length} services`, 'Success');
       } else {
         logChange('Game Mode', `No services needed to be restored`, 'Success');
       }
@@ -614,7 +631,11 @@ document.addEventListener('DOMContentLoaded', () => {
       gameModeState.isOn = false;
       gameModeState.stoppedServices = [];
       saveGameModeState();
+      
+      await fetchServices(); // Refresh service state after starting
       renderGameModeUI();
+      populateGameModeServices(gameModeState.servicesToStop);
+
       updateStatus('Game Mode deactivated.', false);
 
       // Re-enable watcher if the user wants it
@@ -686,7 +707,11 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleWatcher();
   });
 
-  refreshBtn.addEventListener('click', fetchServices);
+  refreshBtn.addEventListener('click', async () => {
+    await fetchServices();
+    // After a manual refresh, the Game Mode list badges might be out of date
+    populateGameModeServices(gameModeState.servicesToStop);
+  });
   refreshChangesBtn.addEventListener('click', renderChanges);
 
   exportBtn.addEventListener('click', async () => {
@@ -750,6 +775,9 @@ document.addEventListener('DOMContentLoaded', () => {
       button.disabled = true;
       button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
       button.title = 'Already in Game Mode list';
+      
+      // Refresh game mode list to show the new service with its status
+      populateGameModeServices(gameModeState.servicesToStop);
 
     } else if (target.closest('.btn-start')) {
       handleServiceAction('start', serviceName, isUser);
@@ -828,7 +856,10 @@ document.addEventListener('DOMContentLoaded', () => {
         allServicesCache[index] = { ...allServicesCache[index], ...event.newState };
       }
       
-      setTimeout(refreshAndRenderServices, 200);
+      setTimeout(() => {
+        refreshAndRenderServices();
+        populateGameModeServices(gameModeState.servicesToStop); // Also update game mode badges
+      }, 200);
     }
   });
 
@@ -899,10 +930,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasSystemd = await checkSystemd();
     if (hasSystemd) {
       await Promise.all([
-        loadGameModeState(), // Load this first so service render knows what's added
-        fetchServices(),
         loadLogs(),
+        loadGameModeState(), // Load this first to have the list ready
+        fetchServices(), // This populates the cache used by game mode badges
       ]);
+      // Re-render game mode list now that allServicesCache is populated
+      populateGameModeServices(gameModeState.servicesToStop);
       toggleWatcher(); // Start watcher based on initial toggle state
     }
   };

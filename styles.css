@@ -714,13 +714,31 @@ input:checked + .slider:before { transform: translateX(18px); }
 
 
 .gamemode-service-info {
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; 
+  flex-direction: column; 
+  align-items: flex-start;
+  gap: 4px;
   min-width: 0; /* Prevents overflow */
+}
+.gamemode-service-info .service-name-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 .gamemode-service-info .service-name {
   font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
   font-size: 0.9rem;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.running-badge {
+  background-color: rgba(59, 165, 93, 0.2);
+  color: var(--success-color);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  text-transform: uppercase;
 }
 .gamemode-service-info .service-hint {
   font-size: 0.8rem; color: var(--text-color-muted);
