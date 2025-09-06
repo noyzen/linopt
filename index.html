@@ -12,8 +12,22 @@
   <div id="title-bar">
     <div id="title">
       <svg id="title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10M18 20V4M6 20V16"></path></svg>
-      Linopt - SystemD Manager
+      Linopt
     </div>
+    <nav class="app-nav">
+      <button id="nav-services-btn" class="nav-btn active" data-view="services-view" title="Services">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+        <span>Services</span>
+      </button>
+      <button id="nav-changes-btn" class="nav-btn" data-view="changes-view" title="Change Log">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+        <span>Changes</span>
+      </button>
+      <button id="nav-gamemode-btn" class="nav-btn" data-view="gamemode-view" title="Game Mode">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8.25c0-1.24-1.01-2.25-2.25-2.25H5.25C4.01 6 3 7.01 3 8.25v7.5C3 16.99 4.01 18 5.25 18h13.5c1.24 0 2.25-1.01 2.25-2.25v-7.5z"></path><path d="M8 14v-4"></path><path d="M6 12h4"></path><path d="M15.5 14a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"></path><path d="M18.5 11a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"></path></svg>
+        <span>Game Mode</span>
+      </button>
+    </nav>
     <div id="title-bar-btns">
       <button id="min-btn" title="Minimize" aria-label="Minimize">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -29,12 +43,6 @@
   </div>
   
   <main class="container">
-    <nav class="app-nav">
-      <button id="nav-services-btn" class="nav-btn active" data-view="services-view">Services</button>
-      <button id="nav-changes-btn" class="nav-btn" data-view="changes-view">Changes</button>
-      <button id="nav-gamemode-btn" class="nav-btn" data-view="gamemode-view">Game Mode</button>
-    </nav>
-
     <!-- Services View -->
     <div id="services-view" class="app-view">
       <header class="app-header">
@@ -217,7 +225,11 @@
                 </button>
               </div>
             </div>
-            <p class="panel-description">The following services will be stopped when Game Mode is activated. Add services from the main list, and remove any you wish to keep running.<br><br>If anything goes wrong by enabling Game Mode, just restart your PC and you will be fine.</p>
+            <p class="panel-description">Linopt suggests a list of all currently running, non-critical services to stop. <strong>Please review this list carefully</strong> and remove any services you need for your session (e.g., cloud sync, bluetooth for controllers).</p>
+            <div class="warning-box">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              <span>If anything goes wrong while Game Mode is active, just restart your PC. This will safely restore all services.</span>
+            </div>
             <div class="search-container">
               <input type="search" id="gamemode-search-input" placeholder="Filter services in list...">
             </div>

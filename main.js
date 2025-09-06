@@ -335,25 +335,41 @@ app.whenReady().then(() => {
   };
 
   ipcMain.handle('systemd:get-optimizable-services', async () => {
-    const listRunningCmd = 'systemctl list-units --type=service --state=running --no-pager --plain --output=json';
+    const listSystemRunningCmd = 'systemctl list-units --type=service --state=running --no-pager --plain --output=json';
+    const listUserRunningCmd = 'systemctl --user list-units --type=service --state=running --no-pager --plain --output=json';
+    
     try {
-      const servicesJson = await runCommand(listRunningCmd);
-      const runningServices = JSON.parse(servicesJson).map(s => s.unit);
+      const [systemServicesJson, userServicesJson] = await Promise.all([
+        runCommand(listSystemRunningCmd).catch(() => '[]'),
+        runCommand(listUserRunningCmd).catch(() => '[]'),
+      ]);
 
-      const optimizable = runningServices
+      const systemServices = JSON.parse(systemServicesJson).map(s => s.unit);
+      const userServices = JSON.parse(userServicesJson).map(s => s.unit);
+      // Use Set to prevent duplicates, just in case
+      const allRunningServices = [...new Set([...systemServices, ...userServices])]; 
+
+      const optimizable = allRunningServices
         .filter(unit => {
+          // Exclude critical/unsafe services
           const isUnsafe = SERVICE_CATEGORIES.UNSAFE_TO_STOP.some(p => unit.includes(p));
-          if (isUnsafe) return false;
-          
-          const isRecommended = SERVICE_CATEGORIES.RECOMMENDED_TO_STOP.some(p => unit.includes(p));
-          const isDisruptive = SERVICE_CATEGORIES.DISRUPTIVE_TO_STOP.some(p => unit.includes(p));
-          return isRecommended || isDisruptive;
+          return !isUnsafe;
         })
         .map(name => {
+          // Provide hints based on existing categories, or a default one
           const isRecommended = SERVICE_CATEGORIES.RECOMMENDED_TO_STOP.some(p => name.includes(p));
+          const isDisruptive = SERVICE_CATEGORIES.DISRUPTIVE_TO_STOP.some(p => name.includes(p));
+          
+          let hint = 'Generally safe to stop, review if unsure';
+          if (isRecommended) {
+            hint = 'Recommended to stop for gaming';
+          } else if (isDisruptive) {
+            hint = 'May reduce some background functionality';
+          }
+          
           return {
             name,
-            hint: isRecommended ? 'Recommended to stop for gaming' : 'May reduce some functionality',
+            hint,
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name));
