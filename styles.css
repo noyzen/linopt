@@ -42,6 +42,11 @@
   50% { transform: translate(-25vw, -20vh) scale(0.8) rotate(180deg); }
   100% { transform: translate(0, 0) rotate(360deg); }
 }
+@keyframes pulse-glow {
+  0% { box-shadow: 0 4px 15px rgba(88, 101, 242, 0.4); }
+  50% { box-shadow: 0 4px 20px rgba(121, 131, 255, 0.6); }
+  100% { box-shadow: 0 4px 15px rgba(88, 101, 242, 0.4); }
+}
 
 * {
   box-sizing: border-box;
@@ -431,6 +436,17 @@ button:focus-visible {
 .service-name {
   font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
   font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.service-hint-indicator {
+  color: var(--text-color-muted);
+  cursor: help;
+  display: flex;
+  align-items: center;
+  margin-left: -10px; /* Counteract some of the parent gap for tighter grouping */
+  transition: color 0.2s ease;
+}
+.service-hint-indicator:hover {
+  color: var(--info-color);
 }
 .user-badge {
   background-color: var(--primary-color);
@@ -923,6 +939,34 @@ input:checked + .slider:before { transform: translateX(18px); }
 .session-details h4 { font-weight: 600; margin-top: 1rem; margin-bottom: 0.5rem; }
 .session-details p { color: var(--text-color-muted); }
 
+.exit-button-container {
+  margin-top: 1.5rem;
+}
+.btn-exit-shiny {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  color: #fff;
+  background: linear-gradient(45deg, var(--primary-color), #7983ff);
+  box-shadow: 0 4px 15px rgba(88, 101, 242, 0.4);
+  transition: all 0.3s ease;
+  animation: pulse-glow 2.5s infinite ease-in-out;
+}
+.btn-exit-shiny:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(88, 101, 242, 0.6);
+}
+.btn-exit-shiny:focus-visible {
+   outline: 2px solid var(--primary-color-hover);
+   outline-offset: 2px;
+}
 
 @media (max-width: 800px) {
   .gamemode-layout {

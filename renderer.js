@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- STATE ---
   let allServicesCache = [];
   let changesLog = [];
-  let gameModeState = { isOn: false, stoppedServices: [], servicesToStop: [] };
+  let gameModeState = { isOn: false, stoppedServices: [], servicesToStop: [], serviceHints: {} };
   let confirmCallback = null;
   const LOG_LIMIT = 500; // Cap logs to prevent performance issues
 
@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const stoppedServiceCount = document.getElementById('stopped-service-count');
   const gameModeSearchInput = document.getElementById('gamemode-search-input');
   const gameModeResetBtn = document.getElementById('gamemode-reset-btn');
+  const gameModeExitBtn = document.getElementById('gamemode-exit-btn');
 
   // Window controls
   const minimizeBtn = document.getElementById('min-btn');
@@ -173,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const serviceRowEl = serviceRow.querySelector('.service-row');
       const statusDot = serviceRow.querySelector('.status-dot');
       const serviceName = serviceRow.querySelector('.service-name');
+      const hintIndicator = serviceRow.querySelector('.service-hint-indicator');
       const userBadge = serviceRow.querySelector('.user-badge');
       const enableToggle = serviceRow.querySelector('.enable-toggle');
       const addGameModeBtn = serviceRow.querySelector('.btn-add-gamemode');
@@ -185,6 +187,15 @@ document.addEventListener('DOMContentLoaded', () => {
       
       serviceName.textContent = service.unit;
       userBadge.classList.toggle('hidden', !service.isUser);
+
+      const userHint = gameModeState.serviceHints[service.unit];
+      if (userHint) {
+        hintIndicator.classList.remove('hidden');
+        hintIndicator.title = userHint;
+      } else {
+        hintIndicator.classList.add('hidden');
+        hintIndicator.title = '';
+      }
 
       const isActive = service.active === 'active';
       const isEnabledOnBoot = service.unit_file_state === 'enabled';
@@ -488,6 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   const loadGameModeState = async () => {
     gameModeState = await window.electronAPI.gamemode.getState();
+    gameModeState.serviceHints = gameModeState.serviceHints || {}; // Ensure hints map exists
     // Auto-populate with recommended services if the list is empty
     if (!gameModeState.servicesToStop || gameModeState.servicesToStop.length === 0) {
       gameModeLoader.classList.remove('hidden');
@@ -583,11 +595,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const isRunning = liveService && liveService.active === 'active';
         
         row.querySelector('.service-name').textContent = service.name;
-        row.querySelector('.service-auto-hint').textContent = service.hint;
+
+        // Try to find hint from persisted state if available, otherwise use from the optimizable list
+        const serviceFromStopList = gameModeState.servicesToStop.find(s => s.name === service.name);
+        row.querySelector('.service-auto-hint').textContent = serviceFromStopList?.hint || 'User-added service';
+
         runningBadge.classList.toggle('hidden', !isRunning);
         
-        if (service.userHint) {
-          userHintEl.textContent = service.userHint;
+        const userHintText = gameModeState.serviceHints[service.name];
+        if (userHintText) {
+          userHintEl.textContent = userHintText;
           userHintEl.classList.remove('placeholder');
         } else {
           userHintEl.textContent = 'Click to add a hint...';
@@ -804,7 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     } else if (target.closest('.btn-add-gamemode')) {
-      const serviceToAdd = { name: serviceName, hint: 'Added from service list', userHint: '' };
+      const serviceToAdd = { name: serviceName, hint: 'Added from service list' };
       gameModeState.servicesToStop.push(serviceToAdd);
       gameModeState.servicesToStop.sort((a,b) => a.name.localeCompare(b.name));
       saveGameModeState();
@@ -917,6 +934,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
+  gameModeExitBtn.addEventListener('click', () => {
+    window.electronAPI.closeWindow();
+  });
+
   gameModeServiceList.addEventListener('click', (e) => {
     const target = e.target;
     const row = target.closest('.gamemode-service-row');
@@ -937,10 +958,8 @@ document.addEventListener('DOMContentLoaded', () => {
       window.electronAPI.openExternalLink(url);
     } else if (target.closest('.service-user-hint')) {
       const hintEl = target.closest('.service-user-hint');
-      const service = gameModeState.servicesToStop.find(s => s.name === serviceName);
-      if (!service) return;
-
-      const currentHint = service.userHint || '';
+      
+      const currentHint = gameModeState.serviceHints[serviceName] || '';
       hintEl.innerHTML = `<input class="hint-input" type="text" value="${currentHint}" />`;
       const input = hintEl.querySelector('input');
       input.focus();
@@ -948,13 +967,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const saveHint = () => {
         const newHint = input.value.trim();
-        const serviceIndex = gameModeState.servicesToStop.findIndex(s => s.name === serviceName);
-        if (serviceIndex > -1) {
-            gameModeState.servicesToStop[serviceIndex].userHint = newHint;
-            saveGameModeState();
+        if (newHint) {
+            gameModeState.serviceHints[serviceName] = newHint;
+        } else {
+            delete gameModeState.serviceHints[serviceName];
         }
-        // Repopulate to restore the non-input version
+        saveGameModeState();
+        
         populateGameModeServices(getFilteredGameModeServices());
+        refreshAndRenderServices(); // Update main list to show/hide indicator
       };
 
       input.addEventListener('blur', saveHint);
@@ -976,7 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
   gameModeResetBtn.addEventListener('click', () => {
     showModal({
       title: 'Reset Game Mode List',
-      message: 'Are you sure you want to reset the list to the default recommended services? Your current customizations will be lost.',
+      message: 'Are you sure you want to reset the list to the default recommended services? Your current customizations and added services will be lost, but your custom hints will be saved.',
       danger: true,
       confirmText: 'Reset',
       onConfirm: async () => {

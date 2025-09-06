@@ -279,7 +279,7 @@ app.whenReady().then(() => {
 
   // --- Game Mode IPC Handlers ---
   ipcMain.handle('gamemode:get-state', () => {
-    const defaultState = { isOn: false, stoppedServices: [], servicesToStop: [] };
+    const defaultState = { isOn: false, stoppedServices: [], servicesToStop: [], serviceHints: {} };
     const savedState = store.get('gameModeState', defaultState);
     return { ...defaultState, ...savedState };
   });
@@ -399,7 +399,7 @@ app.whenReady().then(() => {
           if (isRecommended) hint = 'Recommended to stop for gaming';
           else if (isDisruptive) hint = 'May reduce some background functionality';
           
-          return { name, hint, userHint: '' }; // Add userHint property
+          return { name, hint };
         })
         .sort((a, b) => a.name.localeCompare(b.name));
 
