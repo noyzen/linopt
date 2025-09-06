@@ -461,6 +461,20 @@ app.whenReady().then(() => {
     };
   };
 
+  const createBatchUserServiceAction = (action) => {
+    return async (_, services) => {
+      if (!services || services.length === 0) {
+        return { success: true };
+      }
+      const command = `systemctl --user ${action} ${services.join(' ')}`;
+      return runCommand(command)
+        .then(() => ({ success: true }))
+        .catch(err => {
+          throw new Error(`Failed to ${action} ${services.length} user services: ${err.message}`);
+        });
+    };
+  };
+
   ipcMain.handle('systemd:enable-service', createServiceAction('enable'));
   ipcMain.handle('systemd:disable-service', createServiceAction('disable'));
   ipcMain.handle('systemd:start-service', createServiceAction('start'));
@@ -470,6 +484,8 @@ app.whenReady().then(() => {
   // Batch actions for Game Mode
   ipcMain.handle('systemd:start-services-batch', createBatchServiceAction('start'));
   ipcMain.handle('systemd:stop-services-batch', createBatchServiceAction('stop'));
+  ipcMain.handle('systemd:start-user-services-batch', createBatchUserServiceAction('start'));
+  ipcMain.handle('systemd:stop-user-services-batch', createBatchUserServiceAction('stop'));
   
   createWindow();
 

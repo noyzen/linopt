@@ -555,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isOn) {
       sessionStoppedCount.textContent = stoppedServices.length;
       stoppedServiceCount.textContent = stoppedServices.length;
-      gameModeStoppedList.innerHTML = stoppedServices.map(s => `<li>${s}</li>`).join('');
+      gameModeStoppedList.innerHTML = stoppedServices.map(s => `<li>${s.unit || s}</li>`).join('');
       document.querySelector('#gamemode-session-info .session-icon-large').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`;
     }
   
@@ -628,16 +628,27 @@ document.addEventListener('DOMContentLoaded', () => {
       const serviceNamesToStop = (gameModeState.servicesToStop || []).map(s => s.name);
       
       const runningServicesToStop = allServicesCache
-        .filter(s => serviceNamesToStop.includes(s.unit) && s.active === 'active')
-        .map(s => s.unit);
+        .filter(s => serviceNamesToStop.includes(s.unit) && s.active === 'active');
+      
+      const systemServicesToStop = runningServicesToStop.filter(s => !s.isUser).map(s => s.unit);
+      const userServicesToStop = runningServicesToStop.filter(s => s.isUser).map(s => s.unit);
   
       if (runningServicesToStop.length > 0) {
         // Temporarily pause the watcher to prevent notifications for each service stop
         window.electronAPI.watcher.pause();
 
         gameModeLoaderText.textContent = `Stopping ${runningServicesToStop.length} services...`;
-        await window.electronAPI.systemd.stopServicesBatch(runningServicesToStop);
-        gameModeState.stoppedServices = runningServicesToStop;
+        
+        const stopPromises = [];
+        if (systemServicesToStop.length > 0) {
+          stopPromises.push(window.electronAPI.systemd.stopServicesBatch(systemServicesToStop));
+        }
+        if (userServicesToStop.length > 0) {
+          stopPromises.push(window.electronAPI.systemd.stopUserServicesBatch(userServicesToStop));
+        }
+        await Promise.all(stopPromises);
+
+        gameModeState.stoppedServices = runningServicesToStop.map(s => ({ unit: s.unit, isUser: s.isUser }));
         logChange('Game Mode', `Stopped ${runningServicesToStop.length} services`, 'Success');
       } else {
         gameModeState.stoppedServices = [];
@@ -667,14 +678,25 @@ document.addEventListener('DOMContentLoaded', () => {
     
     try {
       const servicesToPotentiallyStart = gameModeState.stoppedServices || [];
+      const serviceNamesToPotentiallyStart = servicesToPotentiallyStart.map(s => s.unit || s); // handle both formats
       
-      const servicesToActuallyStart = allServicesCache
-        .filter(s => servicesToPotentiallyStart.includes(s.unit) && s.active !== 'active')
-        .map(s => s.unit);
+      const servicesThatAreStillStopped = allServicesCache
+        .filter(s => serviceNamesToPotentiallyStart.includes(s.unit) && s.active !== 'active');
 
-      if (servicesToActuallyStart.length > 0) {
-        await window.electronAPI.systemd.startServicesBatch(servicesToActuallyStart);
-        logChange('Game Mode', `Restored ${servicesToActuallyStart.length} services`, 'Success');
+      const systemServicesToStart = servicesThatAreStillStopped.filter(s => !s.isUser).map(s => s.unit);
+      const userServicesToStart = servicesThatAreStillStopped.filter(s => s.isUser).map(s => s.unit);
+      const totalToStart = systemServicesToStart.length + userServicesToStart.length;
+
+      if (totalToStart > 0) {
+        const startPromises = [];
+        if(systemServicesToStart.length > 0) {
+          startPromises.push(window.electronAPI.systemd.startServicesBatch(systemServicesToStart));
+        }
+        if(userServicesToStart.length > 0) {
+          startPromises.push(window.electronAPI.systemd.startUserServicesBatch(userServicesToStart));
+        }
+        await Promise.all(startPromises);
+        logChange('Game Mode', `Restored ${totalToStart} services`, 'Success');
       } else {
         logChange('Game Mode', `No services needed to be restored`, 'Success');
       }

@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     restartService: (service, isUser) => ipcRenderer.invoke('systemd:restart-service', { service, isUser }),
     startServicesBatch: (services) => ipcRenderer.invoke('systemd:start-services-batch', services),
     stopServicesBatch: (services) => ipcRenderer.invoke('systemd:stop-services-batch', services),
+    startUserServicesBatch: (services) => ipcRenderer.invoke('systemd:start-user-services-batch', services),
+    stopUserServicesBatch: (services) => ipcRenderer.invoke('systemd:stop-user-services-batch', services),
     onServiceChanged: (callback) => ipcRenderer.on('systemd:service-changed', (_event, ...args) => callback(...args)),
   },
 
