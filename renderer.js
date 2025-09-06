@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusBar = document.getElementById('status-bar');
   const statusText = document.getElementById('status-text');
   const searchInput = document.getElementById('search-input');
+  const serviceStatsContainer = document.getElementById('service-stats');
   
   // Navigation
   const navButtons = document.querySelectorAll('.nav-btn');
@@ -74,9 +75,31 @@ document.addEventListener('DOMContentLoaded', () => {
       emptyStateEl.classList.toggle('hidden', !show);
     }
   };
+
+  const updateServiceStats = (services) => {
+    const total = services.length;
+    const running = services.filter(s => s.active === 'active').length;
+    const enabled = services.filter(s => s.unit_file_state === 'enabled').length;
+    
+    serviceStatsContainer.innerHTML = `
+      <div class="stat-item">
+        <span class="stat-value">${total}</span>
+        <span class="stat-label">Total</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">${running}</span>
+        <span class="stat-label">Running</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">${enabled}</span>
+        <span class="stat-label">Enabled</span>
+      </div>
+    `;
+  };
   
   const populateServiceList = (services) => {
     serviceList.innerHTML = '';
+    updateServiceStats(services); // Update stats based on the list being populated
     toggleEmptyState('service-list', !services || services.length === 0);
 
     if (!services || services.length === 0) return;
@@ -84,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sort services alphabetically by unit name
     services.sort((a, b) => a.unit.localeCompare(b.unit));
 
-    services.forEach((service, index) => {
+    services.forEach((service) => {
       const serviceRow = serviceRowTemplate.content.cloneNode(true);
       const rowElement = serviceRow.querySelector('.service-row');
       const serviceName = serviceRow.querySelector('.service-name');
@@ -209,9 +232,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (changesLog.length === 0) return;
 
-    changesLog.forEach((log, index) => {
+    changesLog.forEach((log) => {
       const changeRow = changeRowTemplate.content.cloneNode(true);
-      const rowElement = changeRow.querySelector('.change-row');
       const infoEl = changeRow.querySelector('.change-info');
       const iconEl = changeRow.querySelector('.change-icon');
       const actionEl = changeRow.querySelector('.change-action');
@@ -253,16 +275,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!snapshots || snapshots.length === 0) return;
 
-    snapshots.forEach((snapshot, index) => {
-      const snapshotCardTemplate = snapshotRowTemplate.content.cloneNode(true);
-      const snapshotCard = snapshotCardTemplate.querySelector('.snapshot-card');
-      const nameEl = snapshotCard.querySelector('.snapshot-name');
-      const dateEl = snapshotCard.querySelector('.snapshot-date');
-      const summaryEl = snapshotCard.querySelector('.snapshot-summary');
-      const restoreBtn = snapshotCard.querySelector('.btn-restore');
-      const deleteBtn = snapshotCard.querySelector('.btn-delete');
+    snapshots.forEach((snapshot) => {
+      const snapshotRow = snapshotRowTemplate.content.cloneNode(true);
+      const nameEl = snapshotRow.querySelector('.snapshot-name');
+      const dateEl = snapshotRow.querySelector('.snapshot-date');
+      const summaryEl = snapshotRow.querySelector('.snapshot-summary');
+      const restoreBtn = snapshotRow.querySelector('.btn-restore');
+      const deleteBtn = snapshotRow.querySelector('.btn-delete');
       
-
       const date = new Date(snapshot.id);
       nameEl.textContent = snapshot.name;
       dateEl.textContent = date.toLocaleDateString();
@@ -278,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
-      snapshotList.appendChild(snapshotCardTemplate);
+      snapshotList.appendChild(snapshotRow);
     });
   };
 
@@ -294,7 +314,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    // Using a default name instead of the unsupported prompt()
     const snapshotName = `Snapshot ${new Date().toLocaleString()}`;
 
     const snapshot = {
@@ -307,7 +326,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     await window.electronAPI.snapshots.save(snapshot);
     updateStatus('Snapshot created successfully.', false);
-    // Switch to snapshot view to provide immediate feedback
     switchView('snapshots-view');
   };
 
@@ -377,11 +395,28 @@ Are you sure you want to proceed?`;
       const isTargetView = view.id === viewId;
       view.classList.toggle('hidden', !isTargetView);
       if (isTargetView) {
-          // Re-populate lists if they become visible, to show any logged changes
           if (viewId === 'snapshots-view') loadSnapshots();
           if (viewId === 'changes-view') populateChangesList();
       }
     });
+  };
+
+  // --- Real-time Change Detection ---
+  const interpretServiceChange = ({ unit, oldState, newState }) => {
+      let action = null;
+      // From not running to running
+      if (oldState.active !== 'active' && newState.active === 'active') {
+          action = 'Start';
+      } 
+      // From running to not running
+      else if (oldState.active === 'active' && newState.active !== 'active') {
+          action = 'Stop';
+      }
+      // Can add more granular logic here later if needed
+      
+      if (action) {
+          logChange(action, unit, 'Detected');
+      }
   };
 
   // --- Initialization ---
@@ -397,6 +432,10 @@ Are you sure you want to proceed?`;
       await loadServices();
       await loadSnapshots();
       populateChangesList();
+      
+      // Start listening for real-time changes from the main process
+      window.electronAPI.systemd.onServiceChanged(interpretServiceChange);
+
     } catch (err) {
       updateStatus(`Initialization error: ${err.message}`, true);
       const errorEl = systemdError.querySelector('p');

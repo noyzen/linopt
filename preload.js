@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     startService: (service) => ipcRenderer.invoke('systemd:start-service', service),
     stopService: (service) => ipcRenderer.invoke('systemd:stop-service', service),
     restartService: (service) => ipcRenderer.invoke('systemd:restart-service', service),
+    onServiceChanged: (callback) => ipcRenderer.on('systemd:service-changed', (_event, ...args) => callback(...args)),
   },
 
   // Snapshot functions

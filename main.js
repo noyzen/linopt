@@ -6,6 +6,10 @@ const fs = require('fs').promises;
 
 const store = new Store();
 
+// --- Service Watcher State ---
+let serviceWatcherInterval;
+let previousServicesState = new Map();
+
 // Helper to execute shell commands
 function runCommand(command) {
   return new Promise((resolve, reject) => {
@@ -17,6 +21,58 @@ function runCommand(command) {
       }
       resolve(stdout.trim());
     });
+  });
+}
+
+// --- Service Watcher Logic ---
+async function initializeWatcherState() {
+  try {
+    const unitsStdout = await runCommand('systemctl list-units --type=service --all --no-pager --plain --output=json');
+    const currentServices = JSON.parse(unitsStdout);
+    previousServicesState = new Map(currentServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
+    console.log('Service watcher initialized with current state.');
+  } catch (error) {
+    console.error('Failed to initialize service watcher state:', error.message);
+  }
+}
+
+function startServiceWatcher(win) {
+  // First, get the initial state
+  initializeWatcherState().then(() => {
+    // Then, start the interval watcher
+    serviceWatcherInterval = setInterval(async () => {
+      if (win.isDestroyed()) {
+        clearInterval(serviceWatcherInterval);
+        return;
+      }
+      
+      try {
+        const unitsStdout = await runCommand('systemctl list-units --type=service --all --no-pager --plain --output=json');
+        const currentServices = JSON.parse(unitsStdout);
+        const currentServicesMap = new Map(currentServices.map(s => [s.unit, { active: s.active, sub: s.sub }]));
+
+        // Compare current state with previous state
+        for (const [unit, currentState] of currentServicesMap.entries()) {
+          const prevState = previousServicesState.get(unit);
+          
+          if (prevState && (prevState.active !== currentState.active || prevState.sub !== currentState.sub)) {
+            // A change has been detected
+            win.webContents.send('systemd:service-changed', {
+              unit,
+              oldState: prevState,
+              newState: currentState,
+            });
+          }
+        }
+
+        // Update the previous state for the next check
+        previousServicesState = currentServicesMap;
+
+      } catch (error) {
+        // Don't spam logs for transient errors
+        // console.error('Error in service watcher:', error.message);
+      }
+    }, 3000); // Check every 3 seconds
   });
 }
 
@@ -38,6 +94,8 @@ function createWindow() {
 
   win.once('ready-to-show', () => {
     win.show();
+    // Start the service watcher after the window is visible
+    startServiceWatcher(win);
   });
 
   const saveBounds = () => {
@@ -172,6 +230,9 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  if (serviceWatcherInterval) {
+    clearInterval(serviceWatcherInterval);
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
