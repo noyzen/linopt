@@ -3,6 +3,7 @@ const Store = require('electron-store');
 const path = require('path');
 const { exec } = require('child_process');
 const fs = require('fs').promises;
+const sudo = require('sudo-prompt');
 
 const store = new Store();
 
@@ -355,37 +356,43 @@ app.whenReady().then(() => {
     }
   });
 
-
   const createServiceAction = (action) => {
-    return async (_, { service, isUser }) => {
-      // User services don't need pkexec and require the --user flag.
+    return (_, { service, isUser }) => {
+      // User services don't need sudo and require the --user flag.
       if (isUser) {
         const command = `systemctl --user ${action} ${service}`;
-        try {
-          await runCommand(command);
-          return { success: true };
-        } catch (err) {
-          throw new Error(`Failed to ${action} ${service}: ${err.message}`);
-        }
+        return runCommand(command)
+          .then(() => ({ success: true }))
+          .catch(err => {
+            throw new Error(`Failed to ${action} ${service}: ${err.message}`);
+          });
       }
 
-      // System services need pkexec for elevated privileges.
-      const command = `pkexec systemctl ${action} ${service}`;
-      try {
-        await runCommand(command);
-        return { success: true };
-      } catch (err) {
-        // pkexec returns specific error codes/messages if canceled by the user.
-        // Provide a clearer, more user-friendly error message in that case.
-        const isAuthError = err.message.toLowerCase().includes('polkit') || 
-                            err.message.toLowerCase().includes('cancel') || 
-                            err.message.toLowerCase().includes('authorization');
-                            
-        const errorMessage = isAuthError
-          ? `Authorization was denied or canceled for action: ${action} ${service}.`
-          : `Failed to ${action} ${service}: ${err.message}`;
-        throw new Error(errorMessage);
-      }
+      // System services need elevated privileges. Use sudo-prompt.
+      const command = `systemctl ${action} ${service}`;
+      const sudoOptions = {
+        name: 'Linopt', // This name is shown in the password prompt
+      };
+
+      return new Promise((resolve, reject) => {
+        sudo.exec(command, sudoOptions, (error, stdout, stderr) => {
+          if (error) {
+            // Check for specific cancellation messages from sudo-prompt
+            const userCancelled = error.message && (
+              error.message.toLowerCase().includes('did not grant permission') || 
+              error.message.toLowerCase().includes('authentication canceled')
+            );
+            
+            const errorMessage = userCancelled
+              ? `Authorization was canceled for action: ${action} ${service}.`
+              : `Failed to ${action} ${service}: ${stderr || error.message}`;
+            
+            reject(new Error(errorMessage));
+            return;
+          }
+          resolve({ success: true });
+        });
+      });
     };
   };
 

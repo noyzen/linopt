@@ -19,7 +19,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "electron-store": "^8.2.0"
+    "electron-store": "^8.2.0",
+    "sudo-prompt": "^9.2.1"
   },
   "devDependencies": {
     "electron": "^30.0.3",
