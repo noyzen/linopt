@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   // --- STATE ---
   let allServicesCache = [];
+  let changesLog = [];
 
   // --- DOM Elements ---
   const serviceList = document.getElementById('service-list');
@@ -20,6 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const snapshotList = document.getElementById('snapshot-list');
   const snapshotRowTemplate = document.getElementById('snapshot-row-template');
   const createSnapshotBtn = document.getElementById('create-snapshot-btn');
+
+  // Changes
+  const changeList = document.getElementById('change-list');
+  const changeRowTemplate = document.getElementById('change-row-template');
+  const clearChangesBtn = document.getElementById('clear-changes-btn');
 
   // --- Window controls ---
   const minimizeBtn = document.getElementById('min-btn');
@@ -102,7 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // --- Event Listeners ---
       enableToggle.addEventListener('change', async (e) => {
         const isEnabled = e.target.checked;
-        updateStatus(`Setting ${unitName} to ${isEnabled ? 'enabled' : 'disabled'}...`);
+        const action = isEnabled ? 'Enable' : 'Disable';
+        updateStatus(`${action}ing ${unitName}...`);
         try {
           if (isEnabled) {
             await window.electronAPI.systemd.enableService(unitName);
@@ -115,9 +122,11 @@ document.addEventListener('DOMContentLoaded', () => {
             cachedService.unit_file_state = isEnabled ? 'enabled' : 'disabled';
           }
           updateStatus(`Successfully ${isEnabled ? 'enabled' : 'disabled'} ${unitName}.`);
+          logChange(action, unitName, 'Success');
         } catch (err) {
           updateStatus(`Error: ${err.message}`, true);
           e.target.checked = !isEnabled; // Revert toggle on error
+          logChange(action, unitName, 'Failed');
         }
       });
       
@@ -126,8 +135,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           await actionFn(unitName);
           updateStatus(`Successfully sent ${verb} signal to ${unitName}. Refresh to see updated status.`);
+          logChange(verb, unitName, 'Success');
         } catch (err) {
            updateStatus(`Error: ${err.message}`, true);
+           logChange(verb, unitName, 'Failed');
         }
       };
 
@@ -161,36 +172,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const handleSearch = (e) => {
     const searchTerm = e.target.value.toLowerCase();
-    const rows = serviceList.querySelectorAll('.service-row');
-    rows.forEach(row => {
-      const serviceName = row.dataset.serviceName.toLowerCase();
-      if (serviceName.includes(searchTerm)) {
-        row.classList.remove('hidden');
-      } else {
-        row.classList.add('hidden');
-      }
-    });
+    const filteredServices = allServicesCache.filter(service => service.unit.toLowerCase().includes(searchTerm));
+    populateServiceList(filteredServices);
+  };
+  
+  // --- Change Log Logic ---
+  const populateChangesList = () => {
+    changeList.innerHTML = '';
+    if (changesLog.length === 0) {
+      changeList.innerHTML = '<p style="padding: 1.2rem; color: var(--text-color-muted);">No changes have been logged yet.</p>';
+      return;
+    }
+    for (const log of changesLog) {
+      const changeRow = changeRowTemplate.content.cloneNode(true);
+      const actionEl = changeRow.querySelector('.change-action');
+      const serviceEl = changeRow.querySelector('.change-service');
+      const statusEl = changeRow.querySelector('.change-status');
+      const timeEl = changeRow.querySelector('.change-time');
+
+      actionEl.textContent = log.action;
+      actionEl.dataset.action = log.action;
+      serviceEl.textContent = log.service;
+      statusEl.textContent = log.status;
+      statusEl.dataset.status = log.status;
+      timeEl.textContent = log.timestamp.toLocaleTimeString();
+      
+      changeList.appendChild(changeRow);
+    }
+  };
+
+  const logChange = (action, service, status) => {
+    changesLog.unshift({ action, service, status, timestamp: new Date() });
+    populateChangesList();
+  };
+
+  const clearChanges = () => {
+    if (confirm('Are you sure you want to clear the change log?')) {
+      changesLog = [];
+      populateChangesList();
+      updateStatus('Change log cleared.');
+    }
   };
 
   // --- Snapshot Logic ---
   const populateSnapshotList = (snapshots) => {
     snapshotList.innerHTML = '';
     if (!snapshots || snapshots.length === 0) {
-      snapshotList.innerHTML = '<p style="padding: 1.2rem; color: var(--text-color-muted);">No snapshots created yet.</p>';
+      snapshotList.innerHTML = '<p style="padding: 1.2rem; color: var(--text-color-muted); grid-column: 1 / -1;">No snapshots created yet.</p>';
       return;
     }
 
     for (const snapshot of snapshots) {
-      const snapshotRow = snapshotRowTemplate.content.cloneNode(true);
-      const rowElement = snapshotRow.querySelector('.snapshot-row');
-      const nameEl = snapshotRow.querySelector('.snapshot-name');
-      const dateEl = snapshotRow.querySelector('.snapshot-date');
-      const restoreBtn = snapshotRow.querySelector('.btn-restore');
-      const deleteBtn = snapshotRow.querySelector('.btn-delete');
+      const snapshotCard = snapshotRowTemplate.content.cloneNode(true);
+      const nameEl = snapshotCard.querySelector('.snapshot-name');
+      const dateEl = snapshotCard.querySelector('.snapshot-date');
+      const summaryEl = snapshotCard.querySelector('.snapshot-summary');
+      const restoreBtn = snapshotCard.querySelector('.btn-restore');
+      const deleteBtn = snapshotCard.querySelector('.btn-delete');
       
       const date = new Date(snapshot.id);
-      nameEl.textContent = `Snapshot ${date.toLocaleDateString()}`;
-      dateEl.textContent = `${date.toLocaleTimeString()} - ${snapshot.services.length} services`;
+      nameEl.textContent = snapshot.name;
+      dateEl.textContent = date.toLocaleDateString();
+
+      const enabledCount = snapshot.services.filter(s => s.unit_file_state === 'enabled').length;
+      summaryEl.textContent = `${snapshot.services.length} services: ${enabledCount} enabled`;
 
       restoreBtn.addEventListener('click', () => handleRestoreSnapshot(snapshot));
       deleteBtn.addEventListener('click', async () => {
@@ -200,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
-      snapshotList.appendChild(snapshotRow);
+      snapshotList.appendChild(snapshotCard);
     }
   };
 
@@ -212,10 +257,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const handleCreateSnapshot = async () => {
     if (allServicesCache.length === 0) {
       updateStatus('Cannot create snapshot, no services loaded.', true);
+      alert('Cannot create a snapshot because no services have been loaded. Please refresh the services list first.');
       return;
     }
+    
+    const snapshotName = prompt("Enter a name for this snapshot:", `Snapshot ${new Date().toLocaleString()}`);
+    if (!snapshotName) {
+      updateStatus('Snapshot creation cancelled.');
+      return;
+    }
+
     const snapshot = {
       id: Date.now(),
+      name: snapshotName,
       services: allServicesCache.map(s => ({
         unit: s.unit,
         unit_file_state: s.unit_file_state,
@@ -227,37 +281,65 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const handleRestoreSnapshot = async (snapshot) => {
-    if (!confirm('Are you sure you want to restore this snapshot? This will change your service configurations.')) {
+    updateStatus('Analyzing snapshot for restoration...');
+    
+    let changesToApply = { enable: [], disable: [] };
+    const currentServiceMap = new Map(allServicesCache.map(s => [s.unit, s]));
+
+    for (const serviceInSnapshot of snapshot.services) {
+        const currentService = currentServiceMap.get(serviceInSnapshot.unit);
+        if (currentService && currentService.unit_file_state !== serviceInSnapshot.unit_file_state) {
+            if (serviceInSnapshot.unit_file_state === 'enabled') {
+                changesToApply.enable.push(serviceInSnapshot.unit);
+            } else {
+                changesToApply.disable.push(serviceInSnapshot.unit);
+            }
+        }
+    }
+
+    if (changesToApply.enable.length === 0 && changesToApply.disable.length === 0) {
+        alert('No changes needed. The current service configuration already matches the snapshot.');
+        updateStatus('Restore not needed.');
+        return;
+    }
+
+    const confirmationMessage = `Restoring snapshot "${snapshot.name}" will apply these changes:
+    
+- Enable ${changesToApply.enable.length} service(s).
+- Disable ${changesToApply.disable.length} service(s).
+
+Are you sure you want to proceed? This will alter your system's boot configuration.`;
+
+    if (!confirm(confirmationMessage)) {
+      updateStatus('Restore cancelled by user.');
       return;
     }
+    
     updateStatus('Starting restore process...');
-    try {
-      const currentServices = await window.electronAPI.systemd.getServices();
-      const currentServiceMap = new Map(currentServices.map(s => [s.unit, s]));
-      let changesMade = 0;
-
-      for (const serviceInSnapshot of snapshot.services) {
-        const currentService = currentServiceMap.get(serviceInSnapshot.unit);
-        // Only proceed if the service still exists and its state is different
-        if (currentService && currentService.unit_file_state !== serviceInSnapshot.unit_file_state) {
-          updateStatus(`Restoring ${serviceInSnapshot.unit}...`);
-          try {
-            if (serviceInSnapshot.unit_file_state === 'enabled') {
-              await window.electronAPI.systemd.enableService(serviceInSnapshot.unit);
-            } else {
-              await window.electronAPI.systemd.disableService(serviceInSnapshot.unit);
-            }
-            changesMade++;
-          } catch (err) {
-            console.error(`Failed to restore ${serviceInSnapshot.unit}:`, err);
-            // Continue to the next service
-          }
-        }
+    let changesMade = 0;
+    
+    for (const service of changesToApply.enable) {
+      try {
+        await window.electronAPI.systemd.enableService(service);
+        logChange('Enable', service, 'Success');
+        changesMade++;
+      } catch (err) {
+        logChange('Enable', service, 'Failed');
+        console.error(`Failed to enable ${service}:`, err);
       }
-      updateStatus(`Restore complete. ${changesMade} services updated. Please refresh the services list.`, false);
-    } catch (err) {
-      updateStatus(`Restore failed: ${err.message}`, true);
     }
+    for (const service of changesToApply.disable) {
+       try {
+        await window.electronAPI.systemd.disableService(service);
+        logChange('Disable', service, 'Success');
+        changesMade++;
+      } catch (err) {
+        logChange('Disable', service, 'Failed');
+        console.error(`Failed to disable ${service}:`, err);
+      }
+    }
+
+    updateStatus(`Restore complete. ${changesMade} services updated. Refresh the list to see changes.`, false);
   };
 
 
@@ -273,6 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       await loadServices();
       await loadSnapshots();
+      populateChangesList();
     } catch (err) {
       updateStatus(`Initialization error: ${err.message}`, true);
       systemdError.querySelector('p').textContent = `An error occurred during initialization: ${err.message}`;
@@ -285,6 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshBtn.addEventListener('click', loadServices);
   searchInput.addEventListener('input', handleSearch);
   createSnapshotBtn.addEventListener('click', handleCreateSnapshot);
+  clearChangesBtn.addEventListener('click', clearChanges);
 
   navButtons.forEach(button => {
     button.addEventListener('click', () => {

@@ -77,11 +77,36 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('systemd:get-services', async () => {
-    // This command gets all services, their enabled status, and their active status
-    const command = 'systemctl list-units --type=service --all --no-pager --plain --output=json';
+    const listUnitsCommand = 'systemctl list-units --type=service --all --no-pager --plain --output=json';
+    const listUnitFilesCommand = 'systemctl list-unit-files --type=service --no-pager --plain --output=json';
+
     try {
-      const stdout = await runCommand(command);
-      return JSON.parse(stdout);
+      // Run both commands in parallel for efficiency
+      const [unitsStdout, unitFilesStdout] = await Promise.all([
+        runCommand(listUnitsCommand),
+        runCommand(listUnitFilesCommand)
+      ]);
+
+      const services = JSON.parse(unitsStdout);
+      const unitFiles = JSON.parse(unitFilesStdout);
+      
+      // Create a map for quick lookup of the boot-time enabled/disabled state
+      const unitFileStateMap = new Map();
+      unitFiles.forEach(file => {
+        unitFileStateMap.set(file.unit_file, file.state);
+      });
+
+      // Merge the authoritative boot-time state into the main service list
+      const mergedServices = services.map(service => {
+        // The state from list-unit-files is the ground truth for "enable on boot"
+        const unitFileState = unitFileStateMap.get(service.unit) || service.unit_file_state || 'static';
+        return {
+          ...service,
+          unit_file_state: unitFileState,
+        };
+      });
+
+      return mergedServices;
     } catch (error) {
       console.error('Failed to get services:', error.message);
       throw new Error(`Failed to list services: ${error.message}`);
