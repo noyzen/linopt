@@ -385,7 +385,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const filteredLogs = changesLog.filter(log => {
       const matchesSearch = log.service.toLowerCase().includes(searchTerm);
-      const matchesFilter = activeFilter === 'all' || log.action === activeFilter;
+      // Corrected logic: Check if filter matches action OR status
+      const matchesFilter = activeFilter === 'all' || log.action === activeFilter || log.status === activeFilter;
       return matchesSearch && matchesFilter;
     });
 
