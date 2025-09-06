@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, dialog } = require('electron');
 const Store = require('electron-store');
 const path = require('path');
 const { exec } = require('child_process');
@@ -201,6 +201,33 @@ app.whenReady().then(() => {
     store.set('gameModeState', state);
   });
 
+  // --- File Export Handler ---
+  ipcMain.handle('app:save-export', async (_, content) => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (!win) return { success: false, message: 'No focused window' };
+
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: 'Export Services List',
+      defaultPath: `linopt-services-export-${Date.now()}.txt`,
+      filters: [
+        { name: 'Text Files', extensions: ['txt'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (canceled || !filePath) {
+      return { success: false, message: 'Export canceled by user.' };
+    }
+
+    try {
+      await fs.writeFile(filePath, content, 'utf8');
+      return { success: true, path: filePath };
+    } catch (error) {
+      console.error('Failed to save export file:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
 
   // --- SystemD IPC Handlers ---
 
@@ -255,18 +282,33 @@ app.whenReady().then(() => {
   });
   
   // A conservative blocklist of services/patterns essential for a desktop session.
+  // Expanded to be more aggressive in stopping non-critical services for Game Mode.
   const CRITICAL_SERVICE_PATTERNS = [
-    /^systemd-/, /^user@/, /^session-/, /display-manager\.service$/,
-    /\.socket$/, /\.mount$/, /\.target$/, /\.slice$/,
-    /dbus/, /polkit/, /gdm/, /sddm/, /lightdm/, /NetworkManager/, /wpa_supplicant/,
-    /pipewire/, /pulseaudio/, /wireplumber/, /alsa-/, /bluetooth/,
-    /gnome-/, /kde/, /plasma-/, /xdg-/,
-    /docker/, /podman/, /libvirt/, /virtualbox/, // Virtualization can be critical for some users
-    /cron/, /atd/, // Schedulers
-    /sshd/, // Remote access
-    /udisks2/, // Important for block device management
-    /upower/ // Power management
+      // Core system and session services
+      /^systemd-/, /^user@/, /^session-/, /display-manager\.service$/,
+      /\.socket$/, /\.mount$/, /\.target$/, /\.slice$/,
+      // D-Bus and PolicyKit
+      /dbus/, /polkit/,
+      // Display managers
+      /gdm/, /sddm/, /lightdm/,
+      // Core networking
+      /NetworkManager/, /wpa_supplicant/, /systemd-resolved/,
+      // Core audio stack
+      /pipewire/, /pulseaudio/, /wireplumber/, /alsa-/,
+      // Bluetooth for controllers/headsets
+      /bluetooth/,
+      // Desktop Environment core components
+      /gnome-/, /kde/, /plasma-/, /xdg-/, /iwd/,
+      // Power management
+      /upower/, /power-profiles-daemon/,
+      // Hardware management
+      /udev/,
+      // Graphics drivers
+      /nvidia/, /amd/, /intel/,
+      // Critical login/auth
+      /accounts-daemon/,
   ];
+
 
   ipcMain.handle('systemd:get-optimizable-services', async () => {
       const listRunningCmd = 'systemctl list-units --type=service --state=running --no-pager --plain --output=json';

@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const loader = document.getElementById('loader');
   const systemdError = document.getElementById('systemd-error');
   const refreshBtn = document.getElementById('refresh-btn');
+  const exportBtn = document.getElementById('export-btn');
   const statusBar = document.getElementById('status-bar');
   const statusText = document.getElementById('status-text');
   const searchInput = document.getElementById('search-input');
@@ -262,6 +263,41 @@ document.addEventListener('DOMContentLoaded', () => {
     } finally {
       loader.classList.add('hidden');
       serviceList.classList.remove('hidden');
+    }
+  };
+
+  const handleExport = async () => {
+    if (allServicesCache.length === 0) {
+      updateStatus('No services to export.', true);
+      return;
+    }
+
+    // Sort for consistent output
+    const sortedServices = [...allServicesCache].sort((a, b) => a.unit.localeCompare(b.unit));
+
+    const header = 'STATUS      ENABLED       SERVICE\n';
+    const divider = '==================================================\n';
+
+    const lines = sortedServices.map(service => {
+      const status = (service.active === 'active' ? 'RUNNING' : 'STOPPED').padEnd(12);
+      const enabled = (service.unit_file_state || 'static').toUpperCase().padEnd(14);
+      return `${status}${enabled}${service.unit}`;
+    });
+
+    const content = header + divider + lines.join('\n');
+
+    updateStatus('Exporting service list...');
+    try {
+      const result = await window.electronAPI.saveExportedFile(content);
+      if (result.success) {
+        updateStatus(`Successfully exported services to a file.`);
+      } else if (result.message !== 'Export canceled by user.') {
+        updateStatus(`Export failed: ${result.message}`, true);
+      } else {
+        updateStatus('Export canceled.');
+      }
+    } catch (err) {
+      updateStatus(`Export error: ${err.message}`, true);
     }
   };
   
@@ -749,6 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Event Listeners ---
   refreshBtn.addEventListener('click', loadServices);
+  exportBtn.addEventListener('click', handleExport);
   refreshChangesBtn.addEventListener('click', renderChangesList);
   userServicesToggle.addEventListener('change', loadServices);
   searchInput.addEventListener('input', renderServiceListFromCache);
