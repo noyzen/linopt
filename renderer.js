@@ -350,6 +350,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>`;
       case 'restart':
         return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
+      case 'game mode':
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12.553a10.974 10.974 0 0 1 19 0"/><path d="M12 18.553v-5.023"/><path d="M12 21.523a2.47 2.47 0 0 1-1.235-.353 2.47 2.47 0 0 1-1.235.353A2.5 2.5 0 0 1 7 19.053V14.5a2.5 2.5 0 0 1 2.5-2.5h5a2.5 2.5 0 0 1 2.5 2.5v4.553a2.5 2.5 0 0 1-2.523 2.47 2.47 2.47 0 0 1-1.235-.353 2.47 2.47 0 0 1-1.235.353Z"/><path d="M8.5 11.5v-3a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 .5.5v3"/><path d="M15.5 11.5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1"/></svg>`;
       case 'failed':
         return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
       case 'detected':
@@ -581,11 +583,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (servicesToStop.length === 0) {
         updateStatus('No services to stop for Game Mode.', false);
+        logChange('Game Mode', `Activated (0 services stopped)`, 'Success');
+        gameModeState.isOn = true;
+        gameModeState.stoppedServices = [];
+        saveGameModeState();
       } else {
         updateStatus(`Activating Game Mode... Stopping ${servicesToStop.length} services.`);
         try {
           await window.electronAPI.systemd.stopServicesBatch(servicesToStop);
-          servicesToStop.forEach(service => logChange('Stop', service, 'Success'));
+          logChange('Game Mode', `Activated (${servicesToStop.length} services stopped)`, 'Success');
           updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
           
           gameModeState.isOn = true;
@@ -593,7 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
           saveGameModeState();
           setLiveUpdateState(false); // Disable live updates to prevent interference
         } catch (err) {
-          servicesToStop.forEach(service => logChange('Stop', service, 'Failed'));
+          logChange('Game Mode', 'Activation', 'Failed');
           updateStatus(`Could not activate Game Mode: ${err.message}`, true);
         }
       }
@@ -606,12 +612,14 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStatus(`Deactivating Game Mode... Restoring ${servicesToRestore.length} services.`);
         try {
           await window.electronAPI.systemd.startServicesBatch(servicesToRestore);
-          servicesToRestore.forEach(service => logChange('Start', service, 'Success'));
+          logChange('Game Mode', `Deactivated (${servicesToRestore.length} services restored)`, 'Success');
           updateStatus(`${servicesToRestore.length} services restored.`);
         } catch (err) {
-          servicesToRestore.forEach(service => logChange('Start', service, 'Failed'));
+          logChange('Game Mode', 'Deactivation', 'Failed');
           updateStatus(`Failed to restore services: ${err.message}`, true);
         }
+      } else {
+        logChange('Game Mode', 'Deactivated (0 services restored)', 'Success');
       }
       
       gameModeState.isOn = false;

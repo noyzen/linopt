@@ -434,6 +434,9 @@ input:checked + .slider:before { transform: translateX(18px); }
 .change-info[data-action="Restart"] {
   color: var(--warning-color);
 }
+.change-info[data-action="Game Mode"] {
+  color: var(--primary-color);
+}
 .change-info[data-action="Detected"] {
   color: var(--primary-color);
 }
