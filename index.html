@@ -146,33 +146,52 @@
 
     <!-- Game Mode View -->
     <div id="gamemode-view" class="app-view hidden">
-      <div class="gamemode-container">
-        <div class="gamemode-header">
-          <div class="gamemode-toggle-wrapper">
-            <input type="checkbox" id="gamemode-toggle-checkbox" class="gamemode-toggle-checkbox">
-            <label for="gamemode-toggle-checkbox" class="gamemode-toggle-label">
-              <div class="gamemode-toggle-handle">
-                <svg class="gamemode-icon-off" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
-                <svg class="gamemode-icon-on" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg>
-              </div>
-            </label>
-          </div>
-          <div id="gamemode-status" class="gamemode-status">
-            <div id="gamemode-active-banner" class="gamemode-active-banner hidden">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg>
-              <div class="banner-content">
-                <h4>Game Mode is Active!</h4>
-                <p>For the best performance, consider closing Linopt while you play.</p>
-              </div>
+      <div class="gamemode-layout">
+        
+        <!-- Left Panel: Controls & Status -->
+        <div class="gamemode-control-panel">
+          <div id="gamemode-status-card" class="status-card" data-status="inactive">
+            <div class="status-icon" id="gamemode-status-icon">
+              <!-- Icon injected by JS -->
             </div>
-            <h2 id="gamemode-status-title">Game Mode is Inactive</h2>
-            <p id="gamemode-status-description">Toggle services below and click the switch to optimize your system for gaming.</p>
+            <h2 id="gamemode-status-title">Game Mode</h2>
+            <p id="gamemode-status-description">Optimize system performance.</p>
+            <div id="gamemode-main-loader" class="main-loader hidden">
+              <div class="spinner"></div>
+              <span id="gamemode-loader-text"></span>
+            </div>
           </div>
+          <button id="gamemode-action-btn" data-action="activate">
+            <!-- Content injected by JS -->
+          </button>
+    
+          <div id="gamemode-active-info" class="gamemode-active-info hidden">
+              <h4>Performance Boost!</h4>
+              <p>For the best experience, consider closing Linopt while you play.</p>
+          </div>
+    
+           <div id="gamemode-stopped-list-container" class="gamemode-stopped-list-container hidden">
+              <details>
+                <summary>
+                  <span id="stopped-service-count">0</span> services stopped
+                </summary>
+                <ul id="gamemode-stopped-list">
+                  <!-- Stopped services will be listed here -->
+                </ul>
+              </details>
+            </div>
         </div>
-
+    
+        <!-- Right Panel: Service List -->
         <div id="gamemode-service-panel" class="gamemode-service-panel">
-          <h3>Optimizable Services</h3>
-          <p>These running services have been identified as potentially safe to stop. Uncheck any you wish to keep running.</p>
+          <div class="panel-header">
+            <h3>Services to Optimize</h3>
+            <div class="panel-controls">
+              <button id="gamemode-optimize-all-btn" class="link-btn">Optimize All</button>
+              <button id="gamemode-keep-all-btn" class="link-btn">Keep All</button>
+            </div>
+          </div>
+          <p class="panel-description">Uncheck any services you wish to keep running during Game Mode.</p>
           <div class="list-container">
             <div id="gamemode-service-list" class="list-content">
               <!-- Optimizable services will be dynamically inserted here -->
@@ -188,6 +207,7 @@
             </div>
           </div>
         </div>
+    
       </div>
     </div>
   </main>

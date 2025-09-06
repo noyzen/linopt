@@ -444,112 +444,196 @@ input:checked + .slider:before { transform: translateX(18px); }
 .change-info > .change-icon > svg { color: currentColor; }
 
 
-/* --- Game Mode --- */
+/* --- New Game Mode --- */
 #gamemode-view {
+  padding: 0; /* Override main padding to use our own layout */
+}
+
+.gamemode-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.5rem;
+  height: 100%;
+  padding: 1.5rem;
+  overflow: hidden;
+}
+
+.gamemode-control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background-color: var(--container-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.status-card {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-radius: 6px;
+  padding: 1rem;
+  transition: all 0.4s ease;
+  position: relative;
+  overflow: hidden;
+}
+.status-card[data-status="inactive"] {
+  background: rgba(88, 101, 242, 0.1);
+  border: 1px dashed rgba(88, 101, 242, 0.4);
+}
+.status-card[data-status="active"] {
+  background: rgba(59, 165, 93, 0.1);
+  border: 1px solid var(--success-color);
+}
+.status-card .status-icon {
+  margin-bottom: 1rem;
+  width: 50px;
+  height: 50px;
+  display: flex;
   justify-content: center;
   align-items: center;
 }
-.gamemode-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2rem;
-  width: 100%;
-  max-width: 600px;
+.status-card .status-icon svg {
+  width: 48px;
+  height: 48px;
 }
-.gamemode-toggle-checkbox { display: none; }
-.gamemode-toggle-label {
-  display: block;
-  width: 160px;
-  height: 80px;
-  background-color: var(--container-color);
-  border-radius: 40px;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.3s ease;
-  border: 2px solid var(--border-color);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-}
-.gamemode-toggle-handle {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 64px;
-  height: 64px;
-  background-color: #4f545c;
-  border-radius: 50%;
-  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-  display: grid;
-  place-items: center;
-  color: var(--text-color);
-}
-.gamemode-toggle-handle svg {
-  grid-area: 1 / 1;
-  transition: opacity 0.2s ease;
-}
-.gamemode-icon-on { opacity: 0; }
-.gamemode-icon-off { opacity: 1; }
+.status-card[data-status="inactive"] .status-icon { color: var(--primary-color); }
+.status-card[data-status="active"] .status-icon { color: var(--success-color); }
 
-.gamemode-toggle-checkbox:checked + .gamemode-toggle-label {
-  background-color: var(--success-color);
-  border-color: var(--success-color);
-}
-.gamemode-toggle-checkbox:checked + .gamemode-toggle-label .gamemode-toggle-handle {
-  transform: translateX(80px);
-  background-color: #fff;
-  color: var(--success-color);
-}
-.gamemode-toggle-checkbox:checked + .gamemode-toggle-label .gamemode-icon-on { opacity: 1; }
-.gamemode-toggle-checkbox:checked + .gamemode-toggle-label .gamemode-icon-off { opacity: 0; }
-.gamemode-toggle-checkbox:disabled + .gamemode-toggle-label {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.gamemode-status { text-align: center; width: 100%; }
 #gamemode-status-title {
   font-size: 1.5rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
 }
 #gamemode-status-description {
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: var(--text-color-muted);
-  max-width: 400px;
-  margin: 0 auto;
+  min-height: 40px; /* reserve space */
 }
-.gamemode-active-banner {
+.main-loader { text-align: center; }
+.main-loader .spinner {
+  width: 32px; height: 32px;
+  margin: 0 auto 0.5rem;
+}
+
+#gamemode-action-btn {
   display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.8rem 1.5rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s ease;
+}
+#gamemode-action-btn[data-action="activate"] {
+  background-color: var(--primary-color);
+  color: #fff;
+}
+#gamemode-action-btn[data-action="activate"]:hover {
+  background-color: var(--primary-color-hover);
+}
+#gamemode-action-btn[data-action="deactivate"] {
+  background-color: var(--error-color);
+  color: #fff;
+}
+#gamemode-action-btn[data-action="deactivate"]:hover {
+  background-color: #d13c3e;
+}
+#gamemode-action-btn:disabled {
+  background-color: #4f545c;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.gamemode-active-info {
   background-color: rgba(88, 101, 242, 0.1);
   border: 1px solid var(--primary-color);
   border-radius: 8px;
-  padding: 1rem 1.5rem;
-  margin-bottom: 1.5rem;
+  padding: 1rem;
   text-align: left;
   animation: fadeInUp 0.5s ease-out;
 }
-.gamemode-active-banner svg {
-  color: var(--primary-color);
-  flex-shrink: 0;
-}
-.gamemode-active-banner h4 {
-  font-size: 1.1rem;
+.gamemode-active-info h4 {
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-color);
   margin-bottom: 0.25rem;
 }
-.gamemode-active-banner p {
-  font-size: 0.9rem;
+.gamemode-active-info p {
+  font-size: 0.85rem;
   color: var(--text-color-muted);
 }
-.gamemode-confirmation-area {
-  width: 100%;
+
+.gamemode-stopped-list-container {
+  text-align: left;
+}
+.gamemode-stopped-list-container details {
+  background-color: rgba(0,0,0,0.2);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+.gamemode-stopped-list-container summary {
+  padding: 0.75rem 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+}
+.gamemode-stopped-list-container summary::marker {
+  color: var(--text-color-muted);
+}
+#gamemode-stopped-list {
+  list-style: none;
+  max-height: 150px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-color);
+  padding: 0.5rem;
+}
+#gamemode-stopped-list li {
+  padding: 0.4rem 0.5rem;
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 0.85rem;
+  color: var(--text-color-muted);
+  border-radius: 4px;
+}
+#gamemode-stopped-list li:hover {
+  background-color: rgba(255,255,255,0.05);
+}
+
+.gamemode-service-panel {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  animation: fadeInUp 0.5s ease-out forwards;
+  min-height: 0;
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.panel-header h3 { font-size: 1.25rem; font-weight: 600; }
+.panel-controls { display: flex; gap: 1rem; }
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.link-btn:hover { text-decoration: underline; }
+.panel-description {
+  font-size: 0.9rem;
+  color: var(--text-color-muted);
+  margin-bottom: 1rem;
 }
 .gamemode-service-row {
   display: flex;
@@ -559,32 +643,35 @@ input:checked + .slider:before { transform: translateX(18px); }
   border-bottom: 1px solid var(--border-color);
 }
 .gamemode-service-row:last-child { border-bottom: none; }
-.gamemode-actions {
+.gamemode-service-row .toggle-label {
+  flex-grow: 1; text-align: right;
+}
+.gamemode-service-info {
   display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 2px;
 }
-#gamemode-cancel-btn, #gamemode-confirm-btn {
-  padding: 0.6rem 1.2rem;
-  border-radius: 6px;
-  cursor: pointer;
+.gamemode-service-info .service-name {
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
   font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
 }
-#gamemode-cancel-btn {
-  background-color: transparent;
+.gamemode-service-info .service-hint {
+  font-size: 0.8rem;
   color: var(--text-color-muted);
 }
-#gamemode-cancel-btn:hover { background-color: var(--container-color); }
-#gamemode-confirm-btn {
-  background-color: var(--success-color);
-  color: #fff;
-}
-#gamemode-confirm-btn:hover { background-color: #359453; }
-#gamemode-confirm-btn:disabled { background-color: #4f545c; cursor: not-allowed; }
 
+@media (max-width: 800px) {
+  .gamemode-layout {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+  .gamemode-control-panel {
+    flex-shrink: 0;
+  }
+  .gamemode-service-panel {
+    min-height: 300px; /* Ensure it has some height */
+  }
+}
 
 /* Empty States & Loader */
 .empty-state, #loader, #gamemode-loader {

@@ -35,14 +35,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const changeFilters = document.getElementById('change-filters');
 
   // Game Mode
-  const gameModeToggle = document.getElementById('gamemode-toggle-checkbox');
+  const gameModeActionBtn = document.getElementById('gamemode-action-btn');
+  const gameModeStatusCard = document.getElementById('gamemode-status-card');
+  const gameModeStatusIcon = document.getElementById('gamemode-status-icon');
   const gameModeStatusTitle = document.getElementById('gamemode-status-title');
   const gameModeStatusDescription = document.getElementById('gamemode-status-description');
-  const gameModeActiveBanner = document.getElementById('gamemode-active-banner');
+  const gameModeMainLoader = document.getElementById('gamemode-main-loader');
+  const gameModeLoaderText = document.getElementById('gamemode-loader-text');
+  const gameModeActiveInfo = document.getElementById('gamemode-active-info');
   const gameModeServicePanel = document.getElementById('gamemode-service-panel');
   const gameModeServiceList = document.getElementById('gamemode-service-list');
   const gameModeServiceRowTemplate = document.getElementById('gamemode-service-row-template');
   const gameModeLoader = document.getElementById('gamemode-loader');
+  const gameModeOptimizeAllBtn = document.getElementById('gamemode-optimize-all-btn');
+  const gameModeKeepAllBtn = document.getElementById('gamemode-keep-all-btn');
+  const gameModeStoppedListContainer = document.getElementById('gamemode-stopped-list-container');
+  const gameModeStoppedList = document.getElementById('gamemode-stopped-list');
+  const stoppedServiceCount = document.getElementById('stopped-service-count');
+
 
   // Window controls
   const minimizeBtn = document.getElementById('min-btn');
@@ -469,12 +479,13 @@ document.addEventListener('DOMContentLoaded', () => {
         serviceHintEl.textContent = service.hint;
         
         excludeToggle.dataset.serviceName = service.name;
+        // Checked means KEEP running. So if it's NOT in the exclusion list, it should be checked.
         excludeToggle.checked = !gameModeState.userExclusions.includes(service.name);
 
         excludeToggle.addEventListener('change', (e) => {
             const serviceName = e.target.dataset.serviceName;
             if (e.target.checked) {
-                // Keep running = NOT excluded
+                // Keep running = NOT excluded from optimization
                 gameModeState.userExclusions = gameModeState.userExclusions.filter(s => s !== serviceName);
             } else {
                 // Don't keep running = excluded
@@ -504,42 +515,71 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const updateGameModeUI = () => {
-    gameModeToggle.checked = gameModeState.isOn;
-    gameModeToggle.disabled = false;
+    gameModeMainLoader.classList.add('hidden');
+    gameModeActionBtn.disabled = false;
     
     if (gameModeState.isOn) {
-      gameModeActiveBanner.classList.remove('hidden');
-      gameModeServicePanel.classList.add('hidden');
+      // --- ACTIVE STATE ---
+      gameModeStatusCard.dataset.status = 'active';
+      gameModeStatusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg>`;
       gameModeStatusTitle.textContent = 'Game Mode is Active';
-      gameModeStatusDescription.textContent = `Click the switch to deactivate and restart ${gameModeState.stoppedServices.length} stopped services.`;
+      gameModeStatusDescription.textContent = `Click below to deactivate and restore stopped services.`;
+      
+      gameModeActionBtn.dataset.action = 'deactivate';
+      gameModeActionBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg><span>Deactivate Game Mode</span>`;
+      
+      gameModeServicePanel.classList.add('hidden');
+      gameModeActiveInfo.classList.remove('hidden');
+
+      const count = gameModeState.stoppedServices.length;
+      if (count > 0) {
+        gameModeStoppedListContainer.classList.remove('hidden');
+        stoppedServiceCount.textContent = count;
+        gameModeStoppedList.innerHTML = gameModeState.stoppedServices.map(s => `<li>${s}</li>`).join('');
+      } else {
+        gameModeStoppedListContainer.classList.add('hidden');
+      }
+
     } else {
-      gameModeActiveBanner.classList.add('hidden');
-      gameModeServicePanel.classList.remove('hidden');
+      // --- INACTIVE STATE ---
+      gameModeStatusCard.dataset.status = 'inactive';
+      gameModeStatusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>`;
       gameModeStatusTitle.textContent = 'Game Mode is Inactive';
-      gameModeStatusDescription.textContent = 'Toggle services below and click the switch to optimize your system for gaming.';
+      gameModeStatusDescription.textContent = 'Optimize your system by temporarily stopping non-essential services.';
+
+      gameModeActionBtn.dataset.action = 'activate';
+      gameModeActionBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg><span>Activate Game Mode</span>`;
+
+      gameModeServicePanel.classList.remove('hidden');
+      gameModeActiveInfo.classList.add('hidden');
+      gameModeStoppedListContainer.classList.add('hidden');
       loadOptimizableServicesPanel();
     }
   };
 
-  const handleGameModeToggle = async (event) => {
-    const activate = event.target.checked;
-    event.target.disabled = true;
+  const handleGameModeAction = async () => {
+    const activate = !gameModeState.isOn;
+    gameModeActionBtn.disabled = true;
+    gameModeStatusDescription.classList.add('hidden');
+    gameModeMainLoader.classList.remove('hidden');
 
     if (activate) {
+      gameModeLoaderText.textContent = 'Optimizing...';
       const servicesToStop = [];
       const userExclusions = [];
 
-      // Read the current state of toggles to determine exclusions
+      // Read the current state of toggles to determine services to stop
       gameModeServiceList.querySelectorAll('.exclude-toggle').forEach(toggle => {
           const serviceName = toggle.dataset.serviceName;
-          if (toggle.checked) {
-            // "Keep running" is checked, so don't stop it.
-          } else {
+          if (!toggle.checked) {
             servicesToStop.push(serviceName);
+          }
+          if (toggle.checked === false && !gameModeState.userExclusions.includes(serviceName)) {
             userExclusions.push(serviceName);
           }
       });
       gameModeState.userExclusions = userExclusions;
+      saveGameModeState();
 
       updateStatus(`Activating Game Mode... Stopping ${servicesToStop.length} services.`);
 
@@ -556,11 +596,11 @@ document.addEventListener('DOMContentLoaded', () => {
       gameModeState.isOn = true;
       gameModeState.stoppedServices = servicesToStop;
       saveGameModeState();
-      updateGameModeUI();
       updateStatus(`Game Mode activated. ${servicesToStop.length} services stopped.`);
       setLiveUpdateState(false);
     } else {
       // Deactivate
+      gameModeLoaderText.textContent = 'Restoring...';
       const servicesToRestore = gameModeState.stoppedServices;
       if (servicesToRestore.length > 0) {
         updateStatus(`Deactivating Game Mode... Restoring ${servicesToRestore.length} services.`);
@@ -576,9 +616,11 @@ document.addEventListener('DOMContentLoaded', () => {
       gameModeState.isOn = false;
       gameModeState.stoppedServices = [];
       saveGameModeState();
-      updateGameModeUI();
       updateStatus('Game Mode deactivated.');
     }
+
+    gameModeStatusDescription.classList.remove('hidden');
+    updateGameModeUI();
   };
 
   // --- View Switching ---
@@ -785,7 +827,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  gameModeToggle.addEventListener('change', handleGameModeToggle);
+  gameModeActionBtn.addEventListener('click', handleGameModeAction);
+  
+  const setAllGameModeToggles = (checked) => {
+    gameModeServiceList.querySelectorAll('.exclude-toggle').forEach(toggle => {
+      if (toggle.checked !== checked) {
+        toggle.checked = checked;
+        // Manually dispatch change event to update state
+        toggle.dispatchEvent(new Event('change'));
+      }
+    });
+  };
+  gameModeKeepAllBtn.addEventListener('click', () => setAllGameModeToggles(true));
+  gameModeOptimizeAllBtn.addEventListener('click', () => setAllGameModeToggles(false));
   
   initializeApp();
 });
