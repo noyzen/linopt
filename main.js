@@ -1,11 +1,10 @@
-const { app, BrowserWindow, ipcMain, Notification, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, dialog, shell } = require('electron');
 const Store = require('electron-store');
 const path = require('path');
 const { exec } = require('child_process');
 const fs = require('fs').promises;
 const sudo = require('sudo-prompt');
 const dns = require('dns');
-const { GoogleGenAI } = require('@google/genai');
 
 const store = new Store();
 
@@ -252,6 +251,14 @@ app.whenReady().then(() => {
   ipcMain.handle('gamemode:set-state', (_, state) => {
     store.set('gameModeState', state);
   });
+  
+  // --- External Link Handler ---
+  ipcMain.on('app:open-external-link', (_, url) => {
+    // Basic validation to ensure only http/https protocols are opened
+    if (url.startsWith('http:') || url.startsWith('https:')) {
+      shell.openExternal(url);
+    }
+  });
 
   // --- File Export Handler ---
   ipcMain.handle('app:save-export', async (_, content) => {
@@ -296,7 +303,7 @@ app.whenReady().then(() => {
     return internalFetchServices(includeUserServices);
   });
   
-  // --- Game Mode Service Categorization & AI ---
+  // --- Game Mode Service Categorization ---
   const SERVICE_CATEGORIES = {
     UNSAFE_TO_STOP: [
       'systemd', 'dbus', 'polkit', 'logind', 'user@',
@@ -357,7 +364,7 @@ app.whenReady().then(() => {
           if (isRecommended) hint = 'Recommended to stop for gaming';
           else if (isDisruptive) hint = 'May reduce some background functionality';
           
-          return { name, hint };
+          return { name, hint, userHint: '' }; // Add userHint property
         })
         .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -367,45 +374,6 @@ app.whenReady().then(() => {
       throw err;
     }
   });
-
-  ipcMain.handle('app:check-service-safety', async (_, serviceName) => {
-    // 1. Check for internet connection
-    try {
-      await new Promise((resolve, reject) => {
-        dns.lookup('google.com', (err) => {
-          if (err && err.code === 'ENOTFOUND') reject(new Error('No internet connection.'));
-          else resolve();
-        });
-      });
-    } catch (error) {
-      throw error;
-    }
-
-    // 2. Call Gemini API
-    if (!process.env.API_KEY) {
-      throw new Error('API_KEY environment variable not set.');
-    }
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `is it safe to stop ${serviceName} service while gaming on linux?`;
-      const systemInstruction = "You are an expert Linux system administrator. Your task is to determine if stopping a given SystemD service is safe for a user who wants to maximize gaming performance. Based on public web knowledge, provide a very concise, one-sentence recommendation. The recommendation should be a single, plain text sentence. Start your response with one of these four prefixes: 'Safe:', 'Likely safe:', 'Caution:', or 'Unsafe:'. For example: 'Safe: This service is for printing and not needed for gaming.' or 'Caution: Stopping this may disable Bluetooth controllers.' Do not add any extra explanations or formatting.";
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-          systemInstruction,
-          tools: [{googleSearch: {}}],
-        },
-      });
-      
-      return response.text;
-    } catch (error) {
-      console.error(`Gemini API error for ${serviceName}:`, error);
-      throw new Error(`Failed to get safety info: ${error.message}`);
-    }
-  });
-
 
   // Reusable function to execute a command with sudo-prompt
   function runSudoCommand(command, action) {

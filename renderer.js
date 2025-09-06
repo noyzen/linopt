@@ -494,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     renderGameModeUI();
-    populateGameModeServices(gameModeState.servicesToStop);
+    populateGameModeServices(getFilteredGameModeServices());
   };
   
   const renderGameModeUI = () => {
@@ -545,13 +545,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
   
+  const getFilteredGameModeServices = () => {
+    const searchTerm = gameModeSearchInput.value.toLowerCase();
+    return (gameModeState.servicesToStop || []).filter(service => 
+      service.name.toLowerCase().includes(searchTerm)
+    );
+  }
+
   const populateGameModeServices = (servicesToRender) => {
     gameModeServiceList.innerHTML = '';
     
-    const services = servicesToRender;
     const fragment = document.createDocumentFragment();
   
-    if (!services || services.length === 0) {
+    if (!servicesToRender || servicesToRender.length === 0) {
       const searchTerm = gameModeSearchInput.value;
       const message = searchTerm 
         ? "Your search returned no results." 
@@ -559,24 +565,25 @@ document.addEventListener('DOMContentLoaded', () => {
       toggleEmptyState('gamemode-service-list', true, message);
     } else {
       toggleEmptyState('gamemode-service-list', false);
-      services.forEach(service => {
+      servicesToRender.forEach(service => {
         const row = gameModeServiceRowTemplate.content.cloneNode(true);
         const rowEl = row.querySelector('.gamemode-service-row');
         const runningBadge = row.querySelector('.running-badge');
-        const onlineHintEl = row.querySelector('.service-online-hint');
-        const checkOnlineBtn = row.querySelector('.btn-check-online');
+        const userHintEl = row.querySelector('.service-user-hint');
         
         const liveService = allServicesCache.find(s => s.unit === service.name);
         const isRunning = liveService && liveService.active === 'active';
         
         row.querySelector('.service-name').textContent = service.name;
-        row.querySelector('.service-hint').textContent = service.hint;
+        row.querySelector('.service-auto-hint').textContent = service.hint;
         runningBadge.classList.toggle('hidden', !isRunning);
         
-        if (service.onlineHint) {
-          onlineHintEl.textContent = service.onlineHint;
-          onlineHintEl.classList.remove('hidden');
-          checkOnlineBtn.classList.add('hidden');
+        if (service.userHint) {
+          userHintEl.textContent = service.userHint;
+          userHintEl.classList.remove('placeholder');
+        } else {
+          userHintEl.textContent = 'Click to add a hint...';
+          userHintEl.classList.add('placeholder');
         }
 
         rowEl.dataset.serviceName = service.name;
@@ -619,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
       saveGameModeState();
       await fetchServices(); // Refresh service state after stopping
       renderGameModeUI();
-      populateGameModeServices(gameModeState.servicesToStop);
+      populateGameModeServices(getFilteredGameModeServices());
       updateStatus('Game Mode activated.', false);
   
     } catch (error) {
@@ -656,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       await fetchServices(); // Refresh service state after starting
       renderGameModeUI();
-      populateGameModeServices(gameModeState.servicesToStop);
+      populateGameModeServices(getFilteredGameModeServices());
 
       updateStatus('Game Mode deactivated.', false);
 
@@ -724,7 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderChanges();
       } else if (viewId === 'gamemode-view') {
         renderGameModeUI();
-        populateGameModeServices(gameModeState.servicesToStop);
+        populateGameModeServices(getFilteredGameModeServices());
       }
     });
   });
@@ -766,7 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshBtn.addEventListener('click', async () => {
     await fetchServices();
     // After a manual refresh, the Game Mode list badges might be out of date
-    populateGameModeServices(gameModeState.servicesToStop);
+    populateGameModeServices(getFilteredGameModeServices());
   });
   refreshChangesBtn.addEventListener('click', renderChanges);
 
@@ -820,7 +827,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     } else if (target.closest('.btn-add-gamemode')) {
-      const serviceToAdd = { name: serviceName, hint: 'Added from service list' };
+      const serviceToAdd = { name: serviceName, hint: 'Added from service list', userHint: '' };
       gameModeState.servicesToStop.push(serviceToAdd);
       gameModeState.servicesToStop.sort((a,b) => a.name.localeCompare(b.name));
       saveGameModeState();
@@ -833,7 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
       button.title = 'Already in Game Mode list';
       
       renderGameModeUI(); // Update main Game Mode UI (e.g. enable activate button)
-      populateGameModeServices(gameModeState.servicesToStop);
+      populateGameModeServices(getFilteredGameModeServices());
 
     } else if (target.closest('.btn-start')) {
       handleServiceAction('start', serviceName, isUser);
@@ -922,7 +929,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       setTimeout(() => {
         refreshAndRenderServices();
-        populateGameModeServices(gameModeState.servicesToStop); // Also update game mode badges
+        populateGameModeServices(getFilteredGameModeServices()); // Also update game mode badges
       }, 200);
     }
   });
@@ -936,7 +943,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  gameModeServiceList.addEventListener('click', async (e) => {
+  gameModeServiceList.addEventListener('click', (e) => {
     const target = e.target;
     const row = target.closest('.gamemode-service-row');
     if (!row) return;
@@ -946,43 +953,50 @@ document.addEventListener('DOMContentLoaded', () => {
     if (target.closest('.btn-remove-gamemode')) {
       gameModeState.servicesToStop = (gameModeState.servicesToStop || []).filter(s => s.name !== serviceName);
       saveGameModeState();
-      populateGameModeServices(gameModeState.servicesToStop);
+      populateGameModeServices(getFilteredGameModeServices());
       logChange('Remove', `${serviceName} from Game Mode`, 'Success');
       renderGameModeUI();
       refreshAndRenderServices();
     } else if (target.closest('.btn-check-online')) {
-      const button = target.closest('.btn-check-online');
-      button.disabled = true;
-      button.innerHTML = `<div class="spinner-small"></div>`;
-      updateStatus(`Checking ${serviceName} online...`);
+      const query = `is it safe to stop "${serviceName}" service while gaming on linux?`;
+      const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      window.electronAPI.openExternalLink(url);
+    } else if (target.closest('.service-user-hint')) {
+      const hintEl = target.closest('.service-user-hint');
+      const service = gameModeState.servicesToStop.find(s => s.name === serviceName);
+      if (!service) return;
 
-      try {
-        const hint = await window.electronAPI.checkServiceSafety(serviceName);
+      const currentHint = service.userHint || '';
+      hintEl.innerHTML = `<input class="hint-input" type="text" value="${currentHint}" />`;
+      const input = hintEl.querySelector('input');
+      input.focus();
+      input.select();
+
+      const saveHint = () => {
+        const newHint = input.value.trim();
         const serviceIndex = gameModeState.servicesToStop.findIndex(s => s.name === serviceName);
         if (serviceIndex > -1) {
-          gameModeState.servicesToStop[serviceIndex].onlineHint = hint;
-          saveGameModeState();
-          
-          const hintEl = row.querySelector('.service-online-hint');
-          hintEl.textContent = hint;
-          hintEl.classList.remove('hidden');
-          button.classList.add('hidden');
+            gameModeState.servicesToStop[serviceIndex].userHint = newHint;
+            saveGameModeState();
         }
-        updateStatus(`Successfully fetched info for ${serviceName}.`, false);
-      } catch (error) {
-        updateStatus(`Error: ${error.message}`, true);
-        button.disabled = false;
-        button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>`;
-      }
+        // Repopulate to restore the non-input version
+        populateGameModeServices(getFilteredGameModeServices());
+      };
+
+      input.addEventListener('blur', saveHint);
+      input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+              input.blur(); // This will trigger the save
+          } else if (e.key === 'Escape') {
+              // Restore original state without saving
+              populateGameModeServices(getFilteredGameModeServices());
+          }
+      });
     }
   });
 
   gameModeSearchInput.addEventListener('input', () => {
-    const searchTerm = gameModeSearchInput.value.toLowerCase();
-    const filtered = (gameModeState.servicesToStop || []).filter(service => 
-      service.name.toLowerCase().includes(searchTerm)
-    );
-    populateGameModeServices(filtered);
+    populateGameModeServices(getFilteredGameModeServices());
   });
 
   gameModeResetBtn.addEventListener('click', () => {
@@ -999,7 +1013,7 @@ document.addEventListener('DOMContentLoaded', () => {
           gameModeState.servicesToStop = recommended;
           saveGameModeState();
           logChange('Game Mode', 'Reset list to defaults', 'Success');
-          populateGameModeServices(gameModeState.servicesToStop);
+          populateGameModeServices(getFilteredGameModeServices());
           renderGameModeUI();
           refreshAndRenderServices(); // Update the main service list buttons
           updateStatus('Game Mode list has been reset to defaults.', false);
@@ -1026,7 +1040,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ]);
       // Re-render game mode list now that allServicesCache is populated
       renderGameModeUI();
-      populateGameModeServices(gameModeState.servicesToStop);
+      populateGameModeServices(getFilteredGameModeServices());
       toggleWatcher(); // Start watcher based on initial toggle state
     }
   };
