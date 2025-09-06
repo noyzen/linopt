@@ -27,9 +27,18 @@
   </div>
   
   <main class="container">
-    <div id="app-content">
+    <nav class="app-nav">
+      <button id="nav-services-btn" class="nav-btn active" data-view="services-view">Services</button>
+      <button id="nav-snapshots-btn" class="nav-btn" data-view="snapshots-view">Snapshots</button>
+    </nav>
+
+    <!-- Services View -->
+    <div id="services-view" class="app-view">
       <header class="app-header">
-        <h1>System Services</h1>
+        <div class="search-container">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><circle cx="10" cy="10" r="7"></circle><line x1="21" y1="21" x2="15" y2="15"></line></svg>
+          <input type="search" id="search-input" placeholder="Filter services...">
+        </div>
         <button id="refresh-btn" aria-label="Refresh Services">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path></svg>
           <span>Refresh</span>
@@ -49,6 +58,23 @@
         </div>
       </div>
     </div>
+
+    <!-- Snapshots View -->
+    <div id="snapshots-view" class="app-view hidden">
+      <header class="app-header">
+        <h1>Configuration Snapshots</h1>
+        <button id="create-snapshot-btn" aria-label="Create New Snapshot">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Create New Snapshot</span>
+        </button>
+      </header>
+      <div id="snapshot-list-container">
+        <div id="snapshot-list">
+          <!-- Snapshots will be dynamically inserted here -->
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <footer id="status-bar">
@@ -63,15 +89,32 @@
         <span class="service-name"></span>
       </div>
       <div class="service-controls">
-        <label class="toggle-switch">
-          <input type="checkbox" class="enable-toggle" aria-label="Enable on Boot">
-          <span class="slider"></span>
-        </label>
+        <div class="toggle-container">
+          <label class="toggle-switch">
+            <input type="checkbox" class="enable-toggle" aria-label="Enable on Boot">
+            <span class="slider"></span>
+          </label>
+          <span class="toggle-label">Enable on Boot</span>
+        </div>
         <div class="action-buttons">
           <button class="btn-start" title="Start Service">Start</button>
           <button class="btn-stop" title="Stop Service">Stop</button>
           <button class="btn-restart" title="Restart Service">Restart</button>
         </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Template for a snapshot row -->
+  <template id="snapshot-row-template">
+    <div class="snapshot-row" role="listitem">
+      <div class="snapshot-info">
+        <span class="snapshot-name"></span>
+        <span class="snapshot-date"></span>
+      </div>
+      <div class="snapshot-controls">
+        <button class="btn-restore" title="Restore Snapshot">Restore</button>
+        <button class="btn-delete" title="Delete Snapshot">Delete</button>
       </div>
     </div>
   </template>
