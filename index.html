@@ -196,8 +196,17 @@
           <div id="gamemode-service-config">
             <div class="panel-header">
               <h3>Services to Stop</h3>
+              <div class="panel-controls">
+                <button id="gamemode-reset-btn" class="link-btn" title="Reset to default suggestions">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M22 11.5A10 10 0 0 0 3.5 12.5"/><path d="M2 12.5a10 10 0 0 0 18.5-1"/></svg>
+                  <span>Reset</span>
+                </button>
+              </div>
             </div>
             <p class="panel-description">The following services will be stopped when Game Mode is activated. Add services from the main list, and remove any you wish to keep running.</p>
+            <div class="search-container">
+              <input type="search" id="gamemode-search-input" placeholder="Filter services in list...">
+            </div>
             <div id="gamemode-service-list-wrapper" class="list-container">
               <div id="gamemode-service-list" class="list-content">
                 <!-- Optimizable services will be dynamically inserted here -->
@@ -251,7 +260,7 @@
         </div>
         <div class="action-buttons">
           <button class="btn-add-gamemode" title="Add to Game Mode stop list">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="12" x2="10" y2="12"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="15" y1="13" x2="15.01" y2="13"></line><line x1="18" y1="11" x2="18.01" y2="11"></line><path d="M19 17a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-3.28a2 2 0 0 0-1.72.72l-1.42 2.14a2 2 0 0 1-1.72.72H8a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2Z"></path></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8.5h.01M19.5 11.5h.01M2 13h2c.6 0 1 .4 1 1v2c0 .6-.4 1-1 1H2v-4Z"/><path d="M5 15v-2c0-.6.4-1 1-1h2"/><path d="m14 12-2-2-2 2 2 2 2-2Z"/><path d="M22 13v-2c0-.6-.4-1-1-1h-2c-.6 0-1 .4-1 1v2c0 .6.4 1 1 1h2c.6 0 1-.4 1-1Z"/><path d="M6 6.2c1.5 1.8 3.5 3 6 3s4.5-1.2 6-3"/><path d="M6 17.8c1.5-1.8 3.5-3 6-3s4.5 1.2 6 3"/></svg>
           </button>
           <button class="btn-start" title="Start Service">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>

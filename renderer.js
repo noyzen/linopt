@@ -53,6 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const gameModeStoppedListContainer = document.getElementById('gamemode-stopped-list-container');
   const gameModeStoppedList = document.getElementById('gamemode-stopped-list');
   const stoppedServiceCount = document.getElementById('stopped-service-count');
+  const gameModeSearchInput = document.getElementById('gamemode-search-input');
+  const gameModeResetBtn = document.getElementById('gamemode-reset-btn');
 
   // Window controls
   const minimizeBtn = document.getElementById('min-btn');
@@ -104,10 +106,14 @@ document.addEventListener('DOMContentLoaded', () => {
     statusBar.classList.toggle('error', isError);
   };
 
-  const toggleEmptyState = (listId, show) => {
+  const toggleEmptyState = (listId, show, customMessage = null) => {
     const emptyStateEl = document.querySelector(`.empty-state[data-empty-for="${listId}"]`);
     if (emptyStateEl) {
       emptyStateEl.classList.toggle('hidden', !show);
+      if (customMessage) {
+        const p = emptyStateEl.querySelector('p');
+        if (p) p.textContent = customMessage;
+      }
     }
   };
 
@@ -350,7 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'Start': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
       case 'Stop': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>`;
       case 'Restart': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
-      case 'Game Mode': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.78 17.09c.28.14.59.22.92.22a2 2 0 0 0 1.64-.89l.38-.6a2 2 0 0 1 3.4 0l.38.6a2 2 0 0 0 1.64.89c.33 0 .64-.08.92-.22l2.4-1.2a2 2 0 0 0 1.16-1.7V12a2 2 0 0 0-1-1.75l-4-2.5a2 2 0 0 0-2 0l-4 2.5a2 2 0 0 0-1 1.75v2.19a2 2 0 0 0 1.16 1.7z"></path><path d="M12 12V5a3 3 0 0 1 3-3h3a2 2 0 0 1 2 2v2"></path></svg>`;
+      case 'Game Mode': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8.5h.01M19.5 11.5h.01M2 13h2c.6 0 1 .4 1 1v2c0 .6-.4 1-1 1H2v-4Z"/><path d="M5 15v-2c0-.6.4-1 1-1h2"/><path d="m14 12-2-2-2 2 2 2 2-2Z"/><path d="M22 13v-2c0-.6-.4-1-1-1h-2c-.6 0-1 .4-1 1v2c0 .6.4 1 1 1h2c.6 0 1-.4 1-1Z"/><path d="M6 6.2c1.5 1.8 3.5 3 6 3s4.5-1.2 6-3"/><path d="M6 17.8c1.5-1.8 3.5-3 6-3s4.5 1.2 6 3"/></svg>`;
       case 'Add': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
       case 'Remove': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
       case 'Detected': return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>`;
@@ -488,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     renderGameModeUI();
-    populateGameModeServices();
+    populateGameModeServices(gameModeState.servicesToStop);
   };
   
   const renderGameModeUI = () => {
@@ -498,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
     gameModeStatusCard.dataset.status = isOn ? 'active' : 'inactive';
     gameModeStatusIcon.innerHTML = isOn
       ? `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`
-      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="12" x2="10" y2="12"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="15" y1="13" x2="15.01" y2="13"></line><line x1="18" y1="11" x2="18.01" y2="11"></line><path d="M19 17a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-3.28a2 2 0 0 0-1.72.72l-1.42 2.14a2 2 0 0 1-1.72.72H8a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2Z"></path></svg>`;
+      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8.5h.01M19.5 11.5h.01M2 13h2c.6 0 1 .4 1 1v2c0 .6-.4 1-1 1H2v-4Z"/><path d="M5 15v-2c0-.6.4-1 1-1h2"/><path d="m14 12-2-2-2 2 2 2 2-2Z"/><path d="M22 13v-2c0-.6-.4-1-1-1h-2c-.6 0-1 .4-1 1v2c0 .6.4 1 1 1h2c.6 0 1-.4 1-1Z"/><path d="M6 6.2c1.5 1.8 3.5 3 6 3s4.5-1.2 6-3"/><path d="M6 17.8c1.5-1.8 3.5-3 6-3s4.5 1.2 6 3"/></svg>`;
     gameModeStatusTitle.textContent = isOn ? 'Game Mode is Active' : 'Game Mode';
     gameModeStatusDescription.textContent = isOn ? 'System optimized for performance.' : 'Optimize system performance.';
     
@@ -525,16 +531,20 @@ document.addEventListener('DOMContentLoaded', () => {
     gameModeActionBtn.disabled = false;
   };
   
-  const populateGameModeServices = () => {
+  const populateGameModeServices = (servicesToRender) => {
     gameModeServiceList.innerHTML = '';
-    toggleEmptyState('gamemode-service-list', false);
-  
-    const services = gameModeState.servicesToStop || [];
+    
+    const services = servicesToRender;
     const fragment = document.createDocumentFragment();
   
-    if (services.length === 0) {
-      toggleEmptyState('gamemode-service-list', true);
+    if (!services || services.length === 0) {
+      const searchTerm = gameModeSearchInput.value;
+      const message = searchTerm 
+        ? "Your search returned no results." 
+        : "No running, non-essential services were found. You can add services to the list from the main Services page.";
+      toggleEmptyState('gamemode-service-list', true, message);
     } else {
+      toggleEmptyState('gamemode-service-list', false);
       services.forEach(service => {
         const row = gameModeServiceRowTemplate.content.cloneNode(true);
         const rowEl = row.querySelector('.gamemode-service-row');
@@ -637,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderChanges();
       } else if (viewId === 'gamemode-view') {
         renderGameModeUI();
-        populateGameModeServices();
+        populateGameModeServices(gameModeState.servicesToStop);
       }
     });
   });
@@ -840,13 +850,49 @@ document.addEventListener('DOMContentLoaded', () => {
       const serviceName = row.dataset.serviceName;
       gameModeState.servicesToStop = (gameModeState.servicesToStop || []).filter(s => s.name !== serviceName);
       saveGameModeState();
-      populateGameModeServices();
+      populateGameModeServices(gameModeState.servicesToStop);
       logChange('Remove', `${serviceName} from Game Mode`, 'Success');
       // After removing from game mode, we need to refresh the main service list
       // if it's visible, so the 'add' button becomes active again.
       refreshAndRenderServices();
     }
   });
+
+  gameModeSearchInput.addEventListener('input', () => {
+    const searchTerm = gameModeSearchInput.value.toLowerCase();
+    const filtered = (gameModeState.servicesToStop || []).filter(service => 
+      service.name.toLowerCase().includes(searchTerm)
+    );
+    populateGameModeServices(filtered);
+  });
+
+  gameModeResetBtn.addEventListener('click', () => {
+    showModal({
+      title: 'Reset Game Mode List',
+      message: 'Are you sure you want to reset the list to the default recommended services? Your current customizations will be lost.',
+      danger: true,
+      confirmText: 'Reset',
+      onConfirm: async () => {
+        hideModal();
+        gameModeLoader.classList.remove('hidden');
+        try {
+          const recommended = await window.electronAPI.systemd.getOptimizableServices();
+          gameModeState.servicesToStop = recommended;
+          saveGameModeState();
+          logChange('Game Mode', 'Reset list to defaults', 'Success');
+          populateGameModeServices(gameModeState.servicesToStop);
+          refreshAndRenderServices(); // Update the main service list buttons
+          updateStatus('Game Mode list has been reset to defaults.', false);
+        } catch (error) {
+          console.error('Failed to reset Game Mode services:', error);
+          updateStatus('Error resetting Game Mode list.', true);
+        } finally {
+          gameModeLoader.classList.add('hidden');
+        }
+      }
+    });
+  });
+
 
   // --- Initial Load ---
   const initialize = async () => {
