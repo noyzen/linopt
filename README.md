@@ -1,6 +1,17 @@
 # Linopt - The Smart SystemD Manager for Linux
 
-![Linopt Screenshot](https://i.imgur.com/3Z4g8X5.png)
+<p align="center">
+  <em>Services View</em><br>
+  <img src="https://i.imgur.com/ijYVXrv.jpeg" alt="Linopt Services View">
+</p>
+<p align="center">
+  <em>Changes View</em><br>
+  <img src="https://i.imgur.com/sq4x7Z9.jpeg" alt="Linopt Changes View">
+</p>
+<p align="center">
+  <em>Game Mode View</em><br>
+  <img src="https://i.imgur.com/GL0wPVP.jpeg" alt="Linopt Game Mode View">
+</p>
 
 Linopt is a sleek, modern, and powerful graphical user interface (GUI) for managing SystemD services on Linux. Designed for developers, sysadmins, and gamers, it simplifies system optimization with an intuitive interface and powerful features like the one-click **Game Mode**.
 
