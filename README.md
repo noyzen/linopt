@@ -1,19 +1,11 @@
 # Linopt - The Smart SystemD Manager for Linux
 
-<p align="center">
-  <em>Services View</em><br>
-  <img src="https://i.imgur.com/ijYVXrv.jpeg" alt="Linopt Services View">
-</p>
-<p align="center">
-  <em>Changes View</em><br>
-  <img src="https://i.imgur.com/sq4x7Z9.jpeg" alt="Linopt Changes View">
-</p>
-<p align="center">
-  <em>Game Mode View</em><br>
-  <img src="https://i.imgur.com/GL0wPVP.jpeg" alt="Linopt Game Mode View">
-</p>
-
 Linopt is a sleek, modern, and powerful graphical user interface (GUI) for managing SystemD services on Linux. Designed for developers, sysadmins, and gamers, it simplifies system optimization with an intuitive interface and powerful features like the one-click **Game Mode**.
+
+<p align="center">
+  <img src="https://i.imgur.com/ijYVXrv.jpeg" alt="Linopt Services View">
+  <em>The main **Services View**: your central hub for monitoring and managing all system and user services.</em>
+</p>
 
 ## ✨ Core Features
 
@@ -23,7 +15,7 @@ Linopt is a sleek, modern, and powerful graphical user interface (GUI) for manag
     - **One-Click Optimization**: Activate Game Mode to instantly stop the selected services and free up system resources.
     - **Fully Customizable**: Add any service to the stop list or remove suggestions you want to keep running.
     - **Safe & Reversible**: Deactivating Game Mode restores all stopped services to their previous state. If anything goes wrong, a simple reboot provides a clean slate.
-- **Live System Monitoring**: The service list updates in real-time as services change state. Toggle this feature off for manual refresh control.
+- **Live System Monitoring**: The service list updates in real-time as services change state.
 - **Powerful Filtering & Search**: Instantly find services with a fast search bar and advanced filter dropdowns (running, stopped, enabled, etc.).
 - **At-a-Glance Dashboard**: A clean header provides key statistics: total, running, and enabled-on-boot services.
 - **Persistent Change Auditing**: Every action you take is logged and saved across sessions. Logs are automatically grouped by date for easy review.
@@ -40,7 +32,8 @@ Navigate between the three main sections using the buttons at the top:
 - **Game Mode**: Configure and activate a performance-optimized state for your system.
 
 ### Services View
-- **Live Updates**: This toggle (on by default) controls automatic list updates. When off, a "Refresh" button appears.
+This is the main dashboard where you can interact with all detected SystemD services. Use the search and filter options to quickly find what you're looking for, and use the action buttons on each row to manage individual services.
+
 - **Filtering**: Use the search bar and the filter dropdown to quickly narrow down the service list.
 - **User Services**: Toggle "Show User Services" to include services running under your user account.
 - **Actions**:
@@ -49,13 +42,23 @@ Navigate between the three main sections using the buttons at the top:
     - **Add to Game Mode**: Click the controller icon to add a service to the Game Mode stop list.
 
 ### Changes View
-- This view shows a complete, timestamped history of all actions performed through the app.
-- The log is persistent and grouped by date.
+This view provides a complete, timestamped history of every action performed through the app. The log is persistent across sessions and is automatically grouped by date, making it easy to review your recent system modifications.
+
+<p align="center">
+  <img src="https://i.imgur.com/sq4x7Z9.jpeg" alt="Linopt Changes View">
+  <em>The **Changes View** provides a persistent, filterable audit log of all actions.</em>
+</p>
+
 - Use the search and filter dropdowns to find specific log entries.
 - You can clear the entire log using the "Clear Log" button.
 
 ### Game Mode View
-This view is split into two panels: a control panel on the left and a service list on the right.
+This view is split into two panels: a control panel on the left and a service list on the right. It's designed for a simple, three-step optimization process: configure, activate, and deactivate.
+
+<p align="center">
+  <img src="https://i.imgur.com/GL0wPVP.jpeg" alt="Linopt Game Mode View">
+  <em>The **Game Mode View** allows you to configure, activate, and monitor a performance-optimized state.</em>
+</p>
 
 1.  **Configure Your List (Game Mode Off)**:
     - On first launch, Linopt intelligently populates the "Services to Stop" list with safe, non-essential services.
