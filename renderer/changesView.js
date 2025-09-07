@@ -1,4 +1,4 @@
-import { state, dom, showModal, toggleEmptyState } from './shared.js';
+import { state, dom, showModal, hideModal, updateStatus, toggleEmptyState } from './shared.js';
 
 const { changes: changeDom } = dom;
 const LOG_LIMIT = 500;
@@ -152,7 +152,7 @@ export function initChangesView(debounce) {
           state.changesLog = [];
           saveLogs();
           renderChanges();
-          dom.updateStatus('Change log cleared.', false);
+          updateStatus('Change log cleared.', false);
           hideModal();
         }
       });

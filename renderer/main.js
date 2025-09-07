@@ -1,4 +1,4 @@
-import { dom, debounce, showModal, hideModal } from './shared.js';
+import { dom, debounce, showModal, hideModal, updateStatus } from './shared.js';
 import { initServicesView, fetchServices, checkSystemd, refreshAndRenderServices } from './servicesView.js';
 import { initChangesView, renderChanges, logChange, loadLogs } from './changesView.js';
 import { initGameModeView, renderGameModeUI, populateGameModeServices, loadGameModeState } from './gameModeView.js';
@@ -124,12 +124,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     logChange('Detected', `${change.unit} ${details}`, 'Detected');
                 });
-                dom.updateStatus(`Detected and logged ${offlineChanges.length} changes that occurred while the app was closed.`, false);
+                updateStatus(`Detected and logged ${offlineChanges.length} changes that occurred while the app was closed.`, false);
                 renderChanges();
             }
         } catch (error) {
             console.error('Failed to process offline changes:', error);
-            dom.updateStatus('Error processing offline changes.', true);
+            updateStatus('Error processing offline changes.', true);
         }
     };
     
