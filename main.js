@@ -29,6 +29,18 @@ function runCommand(command) {
   });
 }
 
+// Reusable function to save the current service state for offline detection
+function saveCurrentServicesState(systemMap, userMap) {
+  try {
+    store.set('lastKnownServicesState', {
+      system: Array.from(systemMap.entries()),
+      user: Array.from(userMap.entries()),
+    });
+  } catch (error) {
+    console.error('Failed to persist service state:', error);
+  }
+}
+
 // Reusable service fetching logic
 async function internalFetchServices(includeUserServices) {
     const systemListUnitsCmd = 'systemctl list-units --type=service --all --no-pager --plain --output=json';
@@ -169,6 +181,9 @@ async function performWatcherCheck(win) {
 
     previousSystemServicesState = currentSystemMap;
     previousUserServicesState = currentUserMap;
+
+    // Persist this latest state after every check for robust offline detection
+    saveCurrentServicesState(currentSystemMap, currentUserMap);
 }
 
 function setupAppWatcher(win) {
@@ -338,6 +353,56 @@ app.whenReady().then(() => {
     return internalFetchServices(includeUserServices);
   });
   
+  ipcMain.handle('systemd:detect-offline-changes', async () => {
+    try {
+        const lastStateRaw = store.get('lastKnownServicesState');
+        
+        const currentSystemState = await getCombinedServicesState(false);
+        const currentUserState = await getCombinedServicesState(true);
+        
+        // At launch, immediately save the current state. This establishes a new, accurate
+        // baseline for the next session, which is crucial if no previous state exists.
+        saveCurrentServicesState(currentSystemState, currentUserState);
+
+        if (!lastStateRaw || !lastStateRaw.system || !lastStateRaw.user) {
+            console.log('No previous state found. Current state saved as baseline for next launch.');
+            return [];
+        }
+
+        const previousSystemState = new Map(lastStateRaw.system);
+        const previousUserState = new Map(lastStateRaw.user);
+        const changes = [];
+
+        const compareStates = (currentStateMap, previousStateMap, isUser) => {
+            currentStateMap.forEach((currentState, unit) => {
+                const prevState = previousStateMap.get(unit);
+                if (!prevState) {
+                    changes.push({ type: 'added', unit, isUser, newState: currentState });
+                } else if (JSON.stringify(prevState) !== JSON.stringify(currentState)) {
+                    changes.push({ type: 'changed', unit, isUser, oldState: prevState, newState: currentState });
+                }
+            });
+            previousStateMap.forEach((_, unit) => {
+                if (!currentStateMap.has(unit)) {
+                    changes.push({ type: 'removed', unit, isUser });
+                }
+            });
+        };
+
+        compareStates(currentSystemState, previousSystemState, false);
+        compareStates(currentUserState, previousUserState, true);
+
+        if (changes.length > 0) {
+            console.log(`Detected ${changes.length} offline changes.`);
+        }
+
+        return changes;
+    } catch (error) {
+        console.error('Error detecting offline changes:', error);
+        return [];
+    }
+  });
+
   // --- Game Mode Service Categorization ---
   const SERVICE_CATEGORIES = {
     UNSAFE_TO_STOP: [
@@ -514,6 +579,18 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    }
+  });
+
+  app.on('before-quit', async () => {
+    console.log('App is quitting. Saving final service state...');
+    try {
+        const systemState = await getCombinedServicesState(false);
+        const userState = await getCombinedServicesState(true);
+        saveCurrentServicesState(systemState, userState);
+        console.log('Final service state saved.');
+    } catch (error) {
+        console.error('Failed to save final service state on quit:', error);
     }
   });
 });

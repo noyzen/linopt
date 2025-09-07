@@ -26,7 +26,7 @@ export const logChange = (action, serviceName, status, error = null) => {
   }
 };
 
-const loadLogs = async () => {
+export const loadLogs = async () => {
   state.changesLog = await window.electronAPI.logs.get();
   renderChanges();
 };
@@ -131,8 +131,6 @@ export const renderChanges = () => {
 };
 
 export function initChangesView(debounce) {
-    loadLogs();
-  
     changeDom.searchChangesInput.addEventListener('input', debounce(renderChanges, 300));
   
     changeDom.changeFilters.addEventListener('click', (e) => {
@@ -155,7 +153,7 @@ export function initChangesView(debounce) {
           saveLogs();
           renderChanges();
           dom.updateStatus('Change log cleared.', false);
-          dom.hideModal();
+          hideModal();
         }
       });
     });

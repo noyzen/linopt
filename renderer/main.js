@@ -1,6 +1,6 @@
 import { dom, debounce, showModal, hideModal } from './shared.js';
-import { initServicesView, fetchServices, checkSystemd } from './servicesView.js';
-import { initChangesView, renderChanges, logChange } from './changesView.js';
+import { initServicesView, fetchServices, checkSystemd, refreshAndRenderServices } from './servicesView.js';
+import { initChangesView, renderChanges, logChange, loadLogs } from './changesView.js';
 import { initGameModeView, renderGameModeUI, populateGameModeServices, loadGameModeState } from './gameModeView.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -97,12 +97,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         setTimeout(() => {
-            dom.refreshAndRenderServices();
+            refreshAndRenderServices();
             populateGameModeServices();
         }, 200);
     });
 
     // --- Initial Load ---
+    const detectAndLogOfflineChanges = async () => {
+        try {
+            const offlineChanges = await window.electronAPI.systemd.detectOfflineChanges();
+            if (offlineChanges.length > 0) {
+                offlineChanges.forEach(change => {
+                    let details = '';
+                    if (change.type === 'changed') {
+                        if (change.oldState.active !== change.newState.active) {
+                            details = `is now ${change.newState.active}`;
+                        } else if (change.oldState.unit_file_state !== change.newState.unit_file_state) {
+                            details = `is now ${change.newState.unit_file_state} on boot`;
+                        } else {
+                            details = 'was updated';
+                        }
+                    } else if (change.type === 'added') {
+                        details = 'was added';
+                    } else if (change.type === 'removed') {
+                        details = 'was removed';
+                    }
+                    logChange('Detected', `${change.unit} ${details}`, 'Detected');
+                });
+                dom.updateStatus(`Detected and logged ${offlineChanges.length} changes that occurred while the app was closed.`, false);
+                renderChanges();
+            }
+        } catch (error) {
+            console.error('Failed to process offline changes:', error);
+            dom.updateStatus('Error processing offline changes.', true);
+        }
+    };
+    
     const initialize = async () => {
         const hasSystemd = await checkSystemd();
         if (hasSystemd) {
@@ -112,12 +142,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             document.querySelectorAll('.filter-dropdown').forEach(dom.setupFilterDropdown);
             
-            await Promise.all([
-                loadGameModeState(),
-            ]);
-            await fetchServices(); // This populates the cache used by other views
+            await loadLogs();
+            await detectAndLogOfflineChanges();
+            await loadGameModeState();
+            await fetchServices();
             
-            // Re-render game mode list now that allServicesCache is populated
             renderGameModeUI();
             populateGameModeServices();
         }
