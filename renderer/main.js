@@ -81,19 +81,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- IPC Listeners ---
     window.electronAPI.systemd.onServiceChanged((event) => {
-        logChange('Detected', `${event.unit} is now ${event.newState?.active || 'removed'}`, 'Detected');
-        
-        const serviceRow = dom.services.serviceList.querySelector(`[data-service-name="${event.unit}"]`);
+        const { type, unit, oldState, newState, isUser } = event;
+    
+        // Infer and log specific actions from detected changes
+        if (type === 'added') {
+            logChange('Add', unit, 'Success');
+        } else if (type === 'removed') {
+            logChange('Remove', unit, 'Success');
+        } else if (type === 'changed') {
+            if (oldState.active !== newState.active) {
+                logChange(newState.active === 'active' ? 'Start' : 'Stop', unit, 'Success');
+            }
+            if (oldState.unit_file_state !== newState.unit_file_state) {
+                if (newState.unit_file_state === 'enabled') {
+                    logChange('Enable', unit, 'Success');
+                } else if (newState.unit_file_state === 'disabled') {
+                    logChange('Disable', unit, 'Success');
+                }
+            }
+        }
+
+        // Update UI state
+        const serviceRow = dom.services.serviceList.querySelector(`[data-service-name="${unit}"]`);
         if (serviceRow) serviceRow.classList.add('flash-update');
         
-        const index = dom.state.allServicesCache.findIndex(s => s.unit === event.unit);
+        const index = dom.state.allServicesCache.findIndex(s => s.unit === unit);
         
-        if (event.type === 'removed' && index > -1) {
+        if (type === 'removed' && index > -1) {
             dom.state.allServicesCache.splice(index, 1);
-        } else if (event.type === 'added' && index === -1) {
-            dom.state.allServicesCache.push({ unit: event.unit, isUser: event.isUser, ...event.newState });
+        } else if (type === 'added' && index === -1) {
+            dom.state.allServicesCache.push({ unit, isUser, ...newState });
         } else if (index > -1) {
-            dom.state.allServicesCache[index] = { ...dom.state.allServicesCache[index], ...event.newState };
+            dom.state.allServicesCache[index] = { ...dom.state.allServicesCache[index], ...newState };
         }
         
         setTimeout(() => {
@@ -107,25 +126,36 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const offlineChanges = await window.electronAPI.systemd.detectOfflineChanges();
             if (offlineChanges.length > 0) {
+                let loggedChangeCount = 0;
                 offlineChanges.forEach(change => {
-                    let details = '';
-                    if (change.type === 'changed') {
-                        if (change.oldState.active !== change.newState.active) {
-                            details = `is now ${change.newState.active}`;
-                        } else if (change.oldState.unit_file_state !== change.newState.unit_file_state) {
-                            details = `is now ${change.newState.unit_file_state} on boot`;
-                        } else {
-                            details = 'was updated';
+                    const { type, unit, oldState, newState } = change;
+                    if (type === 'added') {
+                        logChange('Add', unit, 'Success');
+                        loggedChangeCount++;
+                    } else if (type === 'removed') {
+                        logChange('Remove', unit, 'Success');
+                        loggedChangeCount++;
+                    } else if (type === 'changed') {
+                        if (oldState.active !== newState.active) {
+                            logChange(newState.active === 'active' ? 'Start' : 'Stop', unit, 'Success');
+                            loggedChangeCount++;
                         }
-                    } else if (change.type === 'added') {
-                        details = 'was added';
-                    } else if (change.type === 'removed') {
-                        details = 'was removed';
+                        if (oldState.unit_file_state !== newState.unit_file_state) {
+                            if (newState.unit_file_state === 'enabled') {
+                                logChange('Enable', unit, 'Success');
+                                loggedChangeCount++;
+                            } else if (newState.unit_file_state === 'disabled') {
+                                logChange('Disable', unit, 'Success');
+                                loggedChangeCount++;
+                            }
+                        }
                     }
-                    logChange('Detected', `${change.unit} ${details}`, 'Detected');
                 });
-                updateStatus(`Detected and logged ${offlineChanges.length} changes that occurred while the app was closed.`, false);
-                renderChanges();
+
+                if (loggedChangeCount > 0) {
+                    updateStatus(`Logged ${loggedChangeCount} changes that occurred while the app was closed.`, false);
+                    renderChanges();
+                }
             }
         } catch (error) {
             console.error('Failed to process offline changes:', error);

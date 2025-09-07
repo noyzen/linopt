@@ -137,10 +137,8 @@
 .change-info[data-action="Disable"], .change-info[data-action="Stop"], .change-info[data-action="Failed"], .change-info[data-action="Remove"] { color: var(--error-color); }
 .change-info[data-action="Restart"] { color: var(--warning-color); }
 .change-info[data-action="Game Mode"] { color: var(--primary-color); }
-.change-info[data-action="Detected"] { color: var(--primary-color); }
 .change-status[data-status="Success"] { color: var(--success-color); }
 .change-status[data-status="Failed"] { color: var(--error-color); }
-.change-status[data-status="Detected"] { color: var(--primary-color); }
 .change-info > .change-icon > svg { color: currentColor; }
 
 
