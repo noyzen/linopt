@@ -3,6 +3,50 @@ import { initServicesView, fetchServices, checkSystemd, refreshAndRenderServices
 import { initChangesView, renderChanges, logChange, loadLogs } from './changesView.js';
 import { initGameModeView, renderGameModeUI, populateGameModeServices, loadGameModeState } from './gameModeView.js';
 
+/**
+ * Analyzes a service change event and logs the most appropriate, specific action.
+ * @param {object} change - The change event object from the main process.
+ * @returns {number} The number of log entries created (0 or more).
+ */
+function analyzeAndLogChange(change) {
+    const { type, unit, oldState, newState } = change;
+    let loggedCount = 0;
+
+    if (type === 'added') {
+        logChange('Add', unit, 'Success');
+        return 1;
+    }
+    if (type === 'removed') {
+        logChange('Remove', unit, 'Success');
+        return 1;
+    }
+    if (type === 'changed') {
+        // Check for enable/disable first, as it can happen with a start/stop
+        if (oldState.unit_file_state !== newState.unit_file_state) {
+            if (newState.unit_file_state === 'enabled') {
+                logChange('Enable', unit, 'Success');
+            } else if (newState.unit_file_state === 'disabled') {
+                logChange('Disable', unit, 'Success');
+            }
+            loggedCount++;
+        }
+
+        // Check for start/stop/crash by comparing running states
+        const wasRunning = oldState.active === 'active' && oldState.sub === 'running';
+        const isRunning = newState.active === 'active' && newState.sub === 'running';
+
+        if (!wasRunning && isRunning) {
+            logChange('Start', unit, 'Success');
+            loggedCount++;
+        } else if (wasRunning && !isRunning) {
+            logChange('Stop', unit, 'Success');
+            loggedCount++;
+        }
+    }
+    return loggedCount;
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- Window Controls ---
     const { minBtn, maxBtn, closeBtn, githubBtn, maxIcon, restoreIcon } = dom.window;
@@ -81,38 +125,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- IPC Listeners ---
     window.electronAPI.systemd.onServiceChanged((event) => {
-        const { type, unit, oldState, newState, isUser } = event;
-    
-        // Infer and log specific actions from detected changes
-        if (type === 'added') {
-            logChange('Add', unit, 'Success');
-        } else if (type === 'removed') {
-            logChange('Remove', unit, 'Success');
-        } else if (type === 'changed') {
-            if (oldState.active !== newState.active) {
-                logChange(newState.active === 'active' ? 'Start' : 'Stop', unit, 'Success');
-            }
-            if (oldState.unit_file_state !== newState.unit_file_state) {
-                if (newState.unit_file_state === 'enabled') {
-                    logChange('Enable', unit, 'Success');
-                } else if (newState.unit_file_state === 'disabled') {
-                    logChange('Disable', unit, 'Success');
-                }
-            }
-        }
+        analyzeAndLogChange(event);
 
         // Update UI state
-        const serviceRow = dom.services.serviceList.querySelector(`[data-service-name="${unit}"]`);
+        const serviceRow = dom.services.serviceList.querySelector(`[data-service-name="${event.unit}"]`);
         if (serviceRow) serviceRow.classList.add('flash-update');
         
-        const index = dom.state.allServicesCache.findIndex(s => s.unit === unit);
+        const index = dom.state.allServicesCache.findIndex(s => s.unit === event.unit);
         
-        if (type === 'removed' && index > -1) {
+        if (event.type === 'removed' && index > -1) {
             dom.state.allServicesCache.splice(index, 1);
-        } else if (type === 'added' && index === -1) {
-            dom.state.allServicesCache.push({ unit, isUser, ...newState });
+        } else if (event.type === 'added' && index === -1) {
+            dom.state.allServicesCache.push({ unit: event.unit, isUser: event.isUser, ...event.newState });
         } else if (index > -1) {
-            dom.state.allServicesCache[index] = { ...dom.state.allServicesCache[index], ...newState };
+            dom.state.allServicesCache[index] = { ...dom.state.allServicesCache[index], ...event.newState };
         }
         
         setTimeout(() => {
@@ -128,28 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (offlineChanges.length > 0) {
                 let loggedChangeCount = 0;
                 offlineChanges.forEach(change => {
-                    const { type, unit, oldState, newState } = change;
-                    if (type === 'added') {
-                        logChange('Add', unit, 'Success');
-                        loggedChangeCount++;
-                    } else if (type === 'removed') {
-                        logChange('Remove', unit, 'Success');
-                        loggedChangeCount++;
-                    } else if (type === 'changed') {
-                        if (oldState.active !== newState.active) {
-                            logChange(newState.active === 'active' ? 'Start' : 'Stop', unit, 'Success');
-                            loggedChangeCount++;
-                        }
-                        if (oldState.unit_file_state !== newState.unit_file_state) {
-                            if (newState.unit_file_state === 'enabled') {
-                                logChange('Enable', unit, 'Success');
-                                loggedChangeCount++;
-                            } else if (newState.unit_file_state === 'disabled') {
-                                logChange('Disable', unit, 'Success');
-                                loggedChangeCount++;
-                            }
-                        }
-                    }
+                    loggedChangeCount += analyzeAndLogChange(change);
                 });
 
                 if (loggedChangeCount > 0) {
