@@ -233,6 +233,7 @@ export function initServicesView(debounce) {
             const serviceToAdd = { name: serviceName, hint: 'Added from service list' };
             state.gameModeState.servicesToStop.push(serviceToAdd);
             state.gameModeState.servicesToStop.sort((a,b) => a.name.localeCompare(b.name));
+            state.gameModeState.hasBeenConfigured = true; // Mark as user-configured
             window.electronAPI.gamemode.setState(state.gameModeState); // Save state
             logChange('Add', `${serviceName} to Game Mode`, 'Success');
             updateStatus(`Added ${serviceName} to Game Mode stop list.`, false);

@@ -11,12 +11,14 @@ const saveGameModeState = () => {
 export const loadGameModeState = async () => {
   state.gameModeState = await window.electronAPI.gamemode.getState();
   state.gameModeState.serviceHints = state.gameModeState.serviceHints || {}; // Ensure hints map exists
-  // Auto-populate with recommended services if the list is empty
-  if (!state.gameModeState.servicesToStop || state.gameModeState.servicesToStop.length === 0) {
+  
+  // Auto-populate ONLY if the list has never been configured by the user.
+  if (!state.gameModeState.hasBeenConfigured) {
     gameModeDom.gameModeLoader.classList.remove('hidden');
     try {
       const recommended = await window.electronAPI.systemd.getOptimizableServices();
       state.gameModeState.servicesToStop = recommended;
+      state.gameModeState.hasBeenConfigured = true; // Mark as configured now
       saveGameModeState();
     } catch (error) {
       console.error('Failed to auto-populate Game Mode services:', error);
@@ -245,6 +247,7 @@ export function initGameModeView(debounce) {
     
         if (target.closest('.btn-remove-gamemode')) {
             state.gameModeState.servicesToStop = (state.gameModeState.servicesToStop || []).filter(s => s.name !== serviceName);
+            state.gameModeState.hasBeenConfigured = true; // Mark as user-configured
             saveGameModeState();
             populateGameModeServices();
             logChange('Remove', `${serviceName} from Game Mode`, 'Success');
@@ -296,6 +299,7 @@ export function initGameModeView(debounce) {
                 try {
                     const recommended = await window.electronAPI.systemd.getOptimizableServices();
                     state.gameModeState.servicesToStop = recommended;
+                    state.gameModeState.hasBeenConfigured = true; // Mark as user-configured
                     saveGameModeState();
                     logChange('Game Mode', 'Reset list to defaults', 'Success');
                     populateGameModeServices();
@@ -321,6 +325,7 @@ export function initGameModeView(debounce) {
             onConfirm: () => {
                 hideModal();
                 state.gameModeState.servicesToStop = [];
+                state.gameModeState.hasBeenConfigured = true; // Mark as user-configured
                 saveGameModeState();
                 logChange('Game Mode', 'Cleared stop list', 'Success');
                 populateGameModeServices();

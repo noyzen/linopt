@@ -294,7 +294,7 @@ app.whenReady().then(() => {
 
   // --- Game Mode IPC Handlers ---
   ipcMain.handle('gamemode:get-state', () => {
-    const defaultState = { isOn: false, stoppedServices: [], servicesToStop: [], serviceHints: {} };
+    const defaultState = { isOn: false, stoppedServices: [], servicesToStop: [], serviceHints: {}, hasBeenConfigured: false };
     const savedState = store.get('gameModeState', defaultState);
     return { ...defaultState, ...savedState };
   });
